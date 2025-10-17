@@ -82,41 +82,61 @@ const Dashboard = () => {
 
         {/* Quick actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-          <Card className="group hover:shadow-xl transition-all duration-300 border-border hover:border-primary/50 cursor-pointer">
-            <CardHeader>
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Upload className="w-6 h-6 text-primary-foreground" />
-              </div>
-              <CardTitle>Nouvelle analyse</CardTitle>
-              <CardDescription>
-                Importez vos données et commencez une nouvelle analyse statistique
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <Link to="/data-analysis">
+            <Card className="group hover:shadow-xl transition-all duration-300 border-border hover:border-primary/50 cursor-pointer h-full">
+              <CardHeader>
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Upload className="w-6 h-6 text-primary-foreground" />
+                </div>
+                <CardTitle>Analyse de données</CardTitle>
+                <CardDescription>
+                  Importez vos datasets (CSV, Excel, SPSS) et obtenez des analyses statistiques complètes
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
 
-          <Card className="group hover:shadow-xl transition-all duration-300 border-border hover:border-secondary/50 cursor-pointer">
-            <CardHeader>
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-secondary to-secondary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <FileText className="w-6 h-6 text-primary-foreground" />
-              </div>
-              <CardTitle>Rédaction</CardTitle>
-              <CardDescription>
-                Générez automatiquement vos sections de rapport scientifique
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <Link to="/statistical-tests">
+            <Card className="group hover:shadow-xl transition-all duration-300 border-border hover:border-secondary/50 cursor-pointer h-full">
+              <CardHeader>
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-secondary to-secondary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Calculator className="w-6 h-6 text-primary-foreground" />
+                </div>
+                <CardTitle>Tests statistiques</CardTitle>
+                <CardDescription>
+                  Plus de 10 tests : Khi², t de Student, Mann-Whitney, corrélations, régressions
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
 
-          <Card className="group hover:shadow-xl transition-all duration-300 border-border hover:border-accent/50 cursor-pointer">
-            <CardHeader>
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-accent to-accent flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <GraduationCap className="w-6 h-6 text-foreground" />
-              </div>
-              <CardTitle>Formation</CardTitle>
-              <CardDescription>
-                Accédez aux exercices et tutoriels pour progresser
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <Link to="/writing">
+            <Card className="group hover:shadow-xl transition-all duration-300 border-border hover:border-accent/50 cursor-pointer h-full">
+              <CardHeader>
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-accent to-accent flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <FileText className="w-6 h-6 text-foreground" />
+                </div>
+                <CardTitle>Rédaction</CardTitle>
+                <CardDescription>
+                  Générez automatiquement vos sections de rapport scientifique
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link to="/training">
+            <Card className="group hover:shadow-xl transition-all duration-300 border-border hover:border-primary/50 cursor-pointer h-full">
+              <CardHeader>
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <GraduationCap className="w-6 h-6 text-primary-foreground" />
+                </div>
+                <CardTitle>Formation</CardTitle>
+                <CardDescription>
+                  Accédez aux exercices et tutoriels pour progresser
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
         </div>
 
         {/* Recent projects */}
