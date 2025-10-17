@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,40 +7,98 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link, useNavigate } from "react-router-dom";
 import { BarChart3, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // TODO: Implement actual authentication
-    setTimeout(() => {
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      toast({
+        title: "Erreur de connexion",
+        description: error.message,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+    } else {
       toast({
         title: "Connexion réussie",
         description: "Bienvenue sur BioStasmarT !",
       });
-      setIsLoading(false);
       navigate("/dashboard");
-    }, 1500);
+    }
   };
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // TODO: Implement actual signup
-    setTimeout(() => {
+    const formData = new FormData(e.currentTarget);
+    const fullName = formData.get("full-name") as string;
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+    const confirmPassword = formData.get("confirm-password") as string;
+
+    if (password !== confirmPassword) {
+      toast({
+        title: "Erreur",
+        description: "Les mots de passe ne correspondent pas",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    const redirectUrl = `${window.location.origin}/`;
+
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: fullName,
+        },
+      },
+    });
+
+    if (error) {
+      toast({
+        title: "Erreur d'inscription",
+        description: error.message,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+    } else {
       toast({
         title: "Compte créé",
         description: "Votre compte a été créé avec succès !",
       });
-      setIsLoading(false);
       navigate("/dashboard");
-    }, 1500);
+    }
   };
 
   return (
@@ -88,7 +146,8 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="login-email">Email</Label>
                     <Input 
-                      id="login-email" 
+                      id="login-email"
+                      name="email"
                       type="email" 
                       placeholder="votre.email@exemple.com" 
                       required 
@@ -97,7 +156,8 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="login-password">Mot de passe</Label>
                     <Input 
-                      id="login-password" 
+                      id="login-password"
+                      name="password"
                       type="password" 
                       placeholder="••••••••" 
                       required 
@@ -119,7 +179,8 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="signup-name">Nom complet</Label>
                     <Input 
-                      id="signup-name" 
+                      id="signup-name"
+                      name="full-name"
                       type="text" 
                       placeholder="Prénom Nom" 
                       required 
@@ -128,7 +189,8 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
                     <Input 
-                      id="signup-email" 
+                      id="signup-email"
+                      name="email"
                       type="email" 
                       placeholder="votre.email@exemple.com" 
                       required 
@@ -137,19 +199,23 @@ const Auth = () => {
                   <div className="space-y-2">
                     <Label htmlFor="signup-password">Mot de passe</Label>
                     <Input 
-                      id="signup-password" 
+                      id="signup-password"
+                      name="password"
                       type="password" 
                       placeholder="••••••••" 
                       required 
+                      minLength={6}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="signup-confirm">Confirmer le mot de passe</Label>
                     <Input 
-                      id="signup-confirm" 
+                      id="signup-confirm"
+                      name="confirm-password"
                       type="password" 
                       placeholder="••••••••" 
                       required 
+                      minLength={6}
                     />
                   </div>
                   <Button 
