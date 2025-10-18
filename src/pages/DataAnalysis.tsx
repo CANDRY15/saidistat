@@ -1,17 +1,44 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Upload, Database, Download, ArrowLeft } from "lucide-react";
+import { BarChart3, Upload, Database, Download, ArrowLeft, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { supabase } from "@/integrations/supabase/client";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+interface ColumnStats {
+  name: string;
+  type: 'numeric' | 'text';
+  count: number;
+  missing: number;
+  unique?: number;
+  mean?: number;
+  median?: number;
+  std?: number;
+  min?: number;
+  max?: number;
+  mode?: string;
+}
+
+interface AnalysisResult {
+  fileName: string;
+  rowCount: number;
+  columnCount: number;
+  columns: string[];
+  statistics: ColumnStats[];
+  preview: any[];
+}
 
 const DataAnalysis = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -35,13 +62,39 @@ const DataAnalysis = () => {
     }
   };
 
-  const handleUpload = () => {
-    if (selectedFile) {
-      toast({
-        title: "Analyse en cours",
-        description: "Vos données sont en cours d'analyse...",
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+    
+    setIsAnalyzing(true);
+    toast({
+      title: "Analyse en cours",
+      description: "Vos données sont en cours d'analyse...",
+    });
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const { data, error } = await supabase.functions.invoke('analyze-data', {
+        body: formData,
       });
-      // TODO: Implement actual file upload and analysis
+
+      if (error) throw error;
+
+      setAnalysisResult(data);
+      toast({
+        title: "Analyse terminée",
+        description: `${data.rowCount} lignes et ${data.columnCount} colonnes analysées`,
+      });
+    } catch (error: any) {
+      console.error('Error analyzing data:', error);
+      toast({
+        title: "Erreur d'analyse",
+        description: error.message || "Une erreur s'est produite lors de l'analyse",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -116,8 +169,8 @@ const DataAnalysis = () => {
                           </p>
                         </div>
                       </div>
-                      <Button onClick={handleUpload}>
-                        Analyser
+                      <Button onClick={handleUpload} disabled={isAnalyzing}>
+                        {isAnalyzing ? "Analyse..." : "Analyser"}
                       </Button>
                     </div>
                   </div>
@@ -132,6 +185,138 @@ const DataAnalysis = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {analysisResult && (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5" />
+                      Résumé de l'analyse
+                    </CardTitle>
+                    <CardDescription>{analysisResult.fileName}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-4 bg-muted rounded-lg">
+                        <p className="text-sm text-muted-foreground">Lignes</p>
+                        <p className="text-2xl font-bold">{analysisResult.rowCount}</p>
+                      </div>
+                      <div className="p-4 bg-muted rounded-lg">
+                        <p className="text-sm text-muted-foreground">Colonnes</p>
+                        <p className="text-2xl font-bold">{analysisResult.columnCount}</p>
+                      </div>
+                      <div className="p-4 bg-muted rounded-lg">
+                        <p className="text-sm text-muted-foreground">Variables numériques</p>
+                        <p className="text-2xl font-bold">
+                          {analysisResult.statistics.filter(s => s.type === 'numeric').length}
+                        </p>
+                      </div>
+                      <div className="p-4 bg-muted rounded-lg">
+                        <p className="text-sm text-muted-foreground">Variables qualitatives</p>
+                        <p className="text-2xl font-bold">
+                          {analysisResult.statistics.filter(s => s.type === 'text').length}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Statistiques descriptives</CardTitle>
+                    <CardDescription>Analyse détaillée par variable</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      {analysisResult.statistics.map((stat, index) => (
+                        <div key={index} className="border rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="font-semibold text-lg">{stat.name}</h3>
+                            <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded">
+                              {stat.type === 'numeric' ? 'Numérique' : 'Qualitative'}
+                            </span>
+                          </div>
+                          
+                          {stat.type === 'numeric' ? (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Moyenne</p>
+                                <p className="font-medium">{stat.mean}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Médiane</p>
+                                <p className="font-medium">{stat.median}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Écart-type</p>
+                                <p className="font-medium">{stat.std}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Min - Max</p>
+                                <p className="font-medium">{stat.min} - {stat.max}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Valeurs uniques</p>
+                                <p className="font-medium">{stat.unique}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Valeurs manquantes</p>
+                                <p className="font-medium">{stat.missing}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                              <div>
+                                <p className="text-xs text-muted-foreground">Valeurs uniques</p>
+                                <p className="font-medium">{stat.unique}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Mode</p>
+                                <p className="font-medium">{stat.mode}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Valeurs manquantes</p>
+                                <p className="font-medium">{stat.missing}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Aperçu des données</CardTitle>
+                    <CardDescription>Premières lignes du fichier</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            {analysisResult.columns.map((col, index) => (
+                              <TableHead key={index}>{col}</TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {analysisResult.preview.map((row, rowIndex) => (
+                            <TableRow key={rowIndex}>
+                              {analysisResult.columns.map((col, colIndex) => (
+                                <TableCell key={colIndex}>{row[col]}</TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
 
           {/* Info Section */}
