@@ -109,12 +109,7 @@ const StatisticalTests = () => {
               {tests.map((test) => (
                 <Card
                   key={test.id}
-                  className={`cursor-pointer transition-all duration-300 hover:shadow-lg ${
-                    selectedTest === test.id
-                      ? "border-primary shadow-lg"
-                      : "border-border hover:border-primary/50"
-                  }`}
-                  onClick={() => setSelectedTest(test.id)}
+                  className="transition-all duration-300 hover:shadow-lg border-border hover:border-primary/50"
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between mb-2">
@@ -125,14 +120,12 @@ const StatisticalTests = () => {
                     <CardDescription>{test.description}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Button
-                      variant={selectedTest === test.id ? "default" : "outline"}
-                      className="w-full"
-                      size="sm"
-                    >
-                      <Calculator className="w-4 h-4 mr-2" />
-                      Utiliser ce test
-                    </Button>
+                    <Link to={`/tests/${test.id}`}>
+                      <Button variant="outline" className="w-full" size="sm">
+                        <Calculator className="w-4 h-4 mr-2" />
+                        Utiliser ce test
+                      </Button>
+                    </Link>
                   </CardContent>
                 </Card>
               ))}
@@ -170,9 +163,11 @@ const StatisticalTests = () => {
                     <span>Vos hypothèses de recherche</span>
                   </li>
                 </ul>
-                <Button className="w-full" variant="hero">
-                  Lancer l'assistant
-                </Button>
+                <Link to="/tests/assistant">
+                  <Button className="w-full" variant="hero">
+                    Lancer l'assistant
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
 

@@ -11,6 +11,9 @@ import DataAnalysis from "./pages/DataAnalysis";
 import StatisticalTests from "./pages/StatisticalTests";
 import Writing from "./pages/Writing";
 import Training from "./pages/Training";
+import Chi2Test from "./pages/tests/Chi2Test";
+import TTest from "./pages/tests/TTest";
+import TestAssistant from "./pages/tests/TestAssistant";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +31,9 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/data-analysis" element={<DataAnalysis />} />
             <Route path="/statistical-tests" element={<StatisticalTests />} />
+            <Route path="/tests/chi2" element={<Chi2Test />} />
+            <Route path="/tests/ttest" element={<TTest />} />
+            <Route path="/tests/assistant" element={<TestAssistant />} />
             <Route path="/writing" element={<Writing />} />
             <Route path="/training" element={<Training />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
