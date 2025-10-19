@@ -106,25 +106,137 @@ const DataAnalysis = () => {
     }
   };
 
-  const downloadAsExcel = () => {
-    toast({
-      title: "Téléchargement Excel",
-      description: "Fonctionnalité en cours de développement",
-    });
+  const downloadAsExcel = async () => {
+    if (!analysisResult) return;
+
+    try {
+      toast({
+        title: "Génération en cours",
+        description: "Création du fichier CSV...",
+      });
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-analysis`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ analysisResult, format: 'excel' }),
+        }
+      );
+
+      if (!response.ok) throw new Error('Erreur lors de la génération du fichier');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `analyse_${analysisResult.fileName}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Téléchargement réussi",
+        description: "Le fichier CSV a été téléchargé",
+      });
+    } catch (error: any) {
+      console.error('Error downloading Excel:', error);
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de générer le fichier",
+        variant: "destructive",
+      });
+    }
   };
 
-  const downloadAsPDF = () => {
-    toast({
-      title: "Téléchargement PDF",
-      description: "Fonctionnalité en cours de développement",
-    });
+  const downloadAsPDF = async () => {
+    if (!analysisResult) return;
+
+    try {
+      toast({
+        title: "Génération en cours",
+        description: "Création du fichier PDF...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('export-analysis', {
+        body: { analysisResult, format: 'pdf' },
+      });
+
+      if (error) throw error;
+
+      // Open print dialog with the HTML content
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(data.html);
+        printWindow.document.close();
+        setTimeout(() => {
+          printWindow.print();
+        }, 250);
+      }
+
+      toast({
+        title: "PDF prêt",
+        description: "Utilisez la boîte de dialogue d'impression pour sauvegarder en PDF",
+      });
+    } catch (error: any) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de générer le PDF",
+        variant: "destructive",
+      });
+    }
   };
 
-  const downloadAsWord = () => {
-    toast({
-      title: "Téléchargement Word",
-      description: "Fonctionnalité en cours de développement",
-    });
+  const downloadAsWord = async () => {
+    if (!analysisResult) return;
+
+    try {
+      toast({
+        title: "Génération en cours",
+        description: "Création du document Word...",
+      });
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-analysis`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ analysisResult, format: 'word' }),
+        }
+      );
+
+      if (!response.ok) throw new Error('Erreur lors de la génération du fichier');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `analyse_${analysisResult.fileName}.doc`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Téléchargement réussi",
+        description: "Le document Word a été téléchargé",
+      });
+    } catch (error: any) {
+      console.error('Error downloading Word:', error);
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de générer le document Word",
+        variant: "destructive",
+      });
+    }
   };
 
   const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', '#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F', '#FFBB28'];
