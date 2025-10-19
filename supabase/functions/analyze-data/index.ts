@@ -6,9 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface FrequencyItem {
+  value: string;
+  count: number;
+  percentage: number;
+}
+
 interface ColumnStats {
   name: string;
-  type: 'numeric' | 'text';
+  type: 'numeric' | 'text' | 'age_groups';
   count: number;
   missing: number;
   unique?: number;
@@ -18,6 +24,7 @@ interface ColumnStats {
   min?: number;
   max?: number;
   mode?: string;
+  frequencies?: FrequencyItem[];
 }
 
 function calculateStats(data: any[], columnName: string): ColumnStats {
@@ -27,7 +34,36 @@ function calculateStats(data: any[], columnName: string): ColumnStats {
   
   // Déterminer le type de données
   const numericValues = values.filter(v => !isNaN(Number(v))).map(Number);
-  const isNumeric = numericValues.length > values.length * 0.5; // Si plus de 50% sont numériques
+  const isNumeric = numericValues.length > values.length * 0.5;
+  
+  // Traitement spécial pour la colonne AGE
+  if (columnName.toUpperCase() === 'AGE' && isNumeric && numericValues.length > 0) {
+    const ageGroups = {
+      'Inférieur à 18': 0,
+      '18 à 35': 0,
+      'Supérieur à 35': 0,
+    };
+    
+    numericValues.forEach(age => {
+      if (age < 18) ageGroups['Inférieur à 18']++;
+      else if (age >= 18 && age <= 35) ageGroups['18 à 35']++;
+      else ageGroups['Supérieur à 35']++;
+    });
+    
+    const frequencies: FrequencyItem[] = Object.entries(ageGroups).map(([value, count]) => ({
+      value,
+      count,
+      percentage: Number(((count / values.length) * 100).toFixed(1)),
+    }));
+    
+    return {
+      name: columnName,
+      type: 'age_groups',
+      count: values.length,
+      missing: missingCount,
+      frequencies,
+    };
+  }
   
   if (isNumeric && numericValues.length > 0) {
     const sorted = numericValues.sort((a, b) => a - b);
@@ -37,7 +73,6 @@ function calculateStats(data: any[], columnName: string): ColumnStats {
       ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
       : sorted[Math.floor(sorted.length / 2)];
     
-    // Écart-type
     const variance = sorted.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / sorted.length;
     const std = Math.sqrt(variance);
     
@@ -54,7 +89,7 @@ function calculateStats(data: any[], columnName: string): ColumnStats {
       max: Number(sorted[sorted.length - 1].toFixed(2)),
     };
   } else {
-    // Variables textuelles
+    // Variables textuelles avec fréquences
     const frequency: Record<string, number> = {};
     values.forEach(v => {
       const key = String(v);
@@ -63,6 +98,14 @@ function calculateStats(data: any[], columnName: string): ColumnStats {
     
     const mode = Object.entries(frequency).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
     
+    const frequencies: FrequencyItem[] = Object.entries(frequency)
+      .sort((a, b) => b[1] - a[1])
+      .map(([value, count]) => ({
+        value,
+        count,
+        percentage: Number(((count / values.length) * 100).toFixed(1)),
+      }));
+    
     return {
       name: columnName,
       type: 'text',
@@ -70,6 +113,7 @@ function calculateStats(data: any[], columnName: string): ColumnStats {
       missing: missingCount,
       unique: new Set(values).size,
       mode,
+      frequencies,
     };
   }
 }

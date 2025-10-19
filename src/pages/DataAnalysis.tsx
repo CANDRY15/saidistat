@@ -10,9 +10,15 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+interface FrequencyItem {
+  value: string;
+  count: number;
+  percentage: number;
+}
+
 interface ColumnStats {
   name: string;
-  type: 'numeric' | 'text';
+  type: 'numeric' | 'text' | 'age_groups';
   count: number;
   missing: number;
   unique?: number;
@@ -22,6 +28,7 @@ interface ColumnStats {
   min?: number;
   max?: number;
   mode?: string;
+  frequencies?: FrequencyItem[];
 }
 
 interface AnalysisResult {
@@ -215,7 +222,7 @@ const DataAnalysis = () => {
                       <div className="p-4 bg-muted rounded-lg">
                         <p className="text-sm text-muted-foreground">Variables qualitatives</p>
                         <p className="text-2xl font-bold">
-                          {analysisResult.statistics.filter(s => s.type === 'text').length}
+                          {analysisResult.statistics.filter(s => s.type === 'text' || s.type === 'age_groups').length}
                         </p>
                       </div>
                     </div>
@@ -234,11 +241,42 @@ const DataAnalysis = () => {
                           <div className="flex items-center justify-between mb-3">
                             <h3 className="font-semibold text-lg">{stat.name}</h3>
                             <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded">
-                              {stat.type === 'numeric' ? 'Numérique' : 'Qualitative'}
+                              {stat.type === 'numeric' ? 'Numérique' : stat.type === 'age_groups' ? 'Tranches d\'âge' : 'Qualitative'}
                             </span>
                           </div>
                           
-                          {stat.type === 'numeric' ? (
+                          {stat.type === 'age_groups' ? (
+                            <div className="overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Tranche d'âge</TableHead>
+                                    <TableHead>Effectif</TableHead>
+                                    <TableHead>Pourcentage</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {stat.frequencies?.map((freq, idx) => (
+                                    <TableRow key={idx}>
+                                      <TableCell className="font-medium">{freq.value}</TableCell>
+                                      <TableCell>{freq.count}</TableCell>
+                                      <TableCell>{freq.percentage}%</TableCell>
+                                    </TableRow>
+                                  ))}
+                                  <TableRow className="font-semibold bg-muted/50">
+                                    <TableCell>Total</TableCell>
+                                    <TableCell>{stat.count}</TableCell>
+                                    <TableCell>100%</TableCell>
+                                  </TableRow>
+                                </TableBody>
+                              </Table>
+                              {stat.missing > 0 && (
+                                <p className="text-sm text-muted-foreground mt-2">
+                                  Valeurs manquantes : {stat.missing}
+                                </p>
+                              )}
+                            </div>
+                          ) : stat.type === 'numeric' ? (
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                               <div>
                                 <p className="text-xs text-muted-foreground">Moyenne</p>
@@ -266,19 +304,42 @@ const DataAnalysis = () => {
                               </div>
                             </div>
                           ) : (
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                              <div>
-                                <p className="text-xs text-muted-foreground">Valeurs uniques</p>
-                                <p className="font-medium">{stat.unique}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Mode</p>
-                                <p className="font-medium">{stat.mode}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Valeurs manquantes</p>
-                                <p className="font-medium">{stat.missing}</p>
-                              </div>
+                            <div className="overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Valeur</TableHead>
+                                    <TableHead>Effectif</TableHead>
+                                    <TableHead>Pourcentage</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {stat.frequencies?.slice(0, 10).map((freq, idx) => (
+                                    <TableRow key={idx}>
+                                      <TableCell className="font-medium">{freq.value}</TableCell>
+                                      <TableCell>{freq.count}</TableCell>
+                                      <TableCell>{freq.percentage}%</TableCell>
+                                    </TableRow>
+                                  ))}
+                                  {stat.frequencies && stat.frequencies.length > 10 && (
+                                    <TableRow>
+                                      <TableCell colSpan={3} className="text-sm text-muted-foreground italic">
+                                        ... et {stat.frequencies.length - 10} autres valeurs
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                  <TableRow className="font-semibold bg-muted/50">
+                                    <TableCell>Total</TableCell>
+                                    <TableCell>{stat.count}</TableCell>
+                                    <TableCell>100%</TableCell>
+                                  </TableRow>
+                                </TableBody>
+                              </Table>
+                              {stat.missing > 0 && (
+                                <p className="text-sm text-muted-foreground mt-2">
+                                  Valeurs manquantes : {stat.missing}
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
