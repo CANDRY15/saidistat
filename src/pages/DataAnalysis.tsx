@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Upload, Database, Download, ArrowLeft, TrendingUp } from "lucide-react";
+import { BarChart3, Upload, Database, Download, ArrowLeft, TrendingUp, FileText, FileSpreadsheet } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface FrequencyItem {
   value: string;
@@ -105,6 +106,29 @@ const DataAnalysis = () => {
     }
   };
 
+  const downloadAsExcel = () => {
+    toast({
+      title: "Téléchargement Excel",
+      description: "Fonctionnalité en cours de développement",
+    });
+  };
+
+  const downloadAsPDF = () => {
+    toast({
+      title: "Téléchargement PDF",
+      description: "Fonctionnalité en cours de développement",
+    });
+  };
+
+  const downloadAsWord = () => {
+    toast({
+      title: "Téléchargement Word",
+      description: "Fonctionnalité en cours de développement",
+    });
+  };
+
+  const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', '#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F', '#FFBB28'];
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
       {/* Header */}
@@ -197,11 +221,29 @@ const DataAnalysis = () => {
               <>
                 <Card>
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5" />
-                      Résumé de l'analyse
-                    </CardTitle>
-                    <CardDescription>{analysisResult.fileName}</CardDescription>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          <TrendingUp className="w-5 h-5" />
+                          Résumé de l'analyse
+                        </CardTitle>
+                        <CardDescription>{analysisResult.fileName}</CardDescription>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={downloadAsExcel}>
+                          <FileSpreadsheet className="w-4 h-4 mr-2" />
+                          Excel
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={downloadAsPDF}>
+                          <FileText className="w-4 h-4 mr-2" />
+                          PDF
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={downloadAsWord}>
+                          <FileText className="w-4 h-4 mr-2" />
+                          Word
+                        </Button>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -235,110 +277,121 @@ const DataAnalysis = () => {
                     <CardDescription>Analyse détaillée par variable</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-6">
+                    <div className="space-y-8">
                       {analysisResult.statistics.map((stat, index) => (
-                        <div key={index} className="border rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-3">
+                        <div key={index} className="border rounded-lg p-6 space-y-4">
+                          <div className="flex items-center justify-between mb-4">
                             <h3 className="font-semibold text-lg">{stat.name}</h3>
-                            <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded">
-                              {stat.type === 'numeric' ? 'Numérique' : stat.type === 'age_groups' ? 'Tranches d\'âge' : 'Qualitative'}
+                            <span className="text-xs px-3 py-1 bg-primary/10 text-primary rounded-full font-medium">
+                              {stat.type === 'numeric' ? 'Quantitative' : stat.type === 'age_groups' ? 'Tranches d\'âge' : 'Qualitative'}
                             </span>
                           </div>
                           
-                          {stat.type === 'age_groups' ? (
-                            <div className="overflow-x-auto">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Tranche d'âge</TableHead>
-                                    <TableHead>Effectif</TableHead>
-                                    <TableHead>Pourcentage</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {stat.frequencies?.map((freq, idx) => (
-                                    <TableRow key={idx}>
-                                      <TableCell className="font-medium">{freq.value}</TableCell>
-                                      <TableCell>{freq.count}</TableCell>
-                                      <TableCell>{freq.percentage}%</TableCell>
-                                    </TableRow>
-                                  ))}
-                                  <TableRow className="font-semibold bg-muted/50">
-                                    <TableCell>Total</TableCell>
-                                    <TableCell>{stat.count}</TableCell>
-                                    <TableCell>100%</TableCell>
-                                  </TableRow>
-                                </TableBody>
-                              </Table>
+                          {stat.type === 'numeric' ? (
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
+                                <div className="text-center">
+                                  <p className="text-xs text-muted-foreground mb-1">Effectif</p>
+                                  <p className="font-semibold text-lg">{stat.count}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs text-muted-foreground mb-1">Moyenne</p>
+                                  <p className="font-semibold text-lg">{stat.mean}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs text-muted-foreground mb-1">Médiane</p>
+                                  <p className="font-semibold text-lg">{stat.median}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs text-muted-foreground mb-1">Écart-type</p>
+                                  <p className="font-semibold text-lg">{stat.std}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs text-muted-foreground mb-1">Minimum</p>
+                                  <p className="font-semibold text-lg">{stat.min}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs text-muted-foreground mb-1">Maximum</p>
+                                  <p className="font-semibold text-lg">{stat.max}</p>
+                                </div>
+                              </div>
                               {stat.missing > 0 && (
-                                <p className="text-sm text-muted-foreground mt-2">
+                                <p className="text-sm text-muted-foreground">
                                   Valeurs manquantes : {stat.missing}
                                 </p>
                               )}
                             </div>
-                          ) : stat.type === 'numeric' ? (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                              <div>
-                                <p className="text-xs text-muted-foreground">Moyenne</p>
-                                <p className="font-medium">{stat.mean}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Médiane</p>
-                                <p className="font-medium">{stat.median}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Écart-type</p>
-                                <p className="font-medium">{stat.std}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Min - Max</p>
-                                <p className="font-medium">{stat.min} - {stat.max}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Valeurs uniques</p>
-                                <p className="font-medium">{stat.unique}</p>
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Valeurs manquantes</p>
-                                <p className="font-medium">{stat.missing}</p>
-                              </div>
-                            </div>
                           ) : (
-                            <div className="overflow-x-auto">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Valeur</TableHead>
-                                    <TableHead>Effectif</TableHead>
-                                    <TableHead>Pourcentage</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {stat.frequencies?.slice(0, 10).map((freq, idx) => (
-                                    <TableRow key={idx}>
-                                      <TableCell className="font-medium">{freq.value}</TableCell>
-                                      <TableCell>{freq.count}</TableCell>
-                                      <TableCell>{freq.percentage}%</TableCell>
+                            <div className="grid md:grid-cols-2 gap-6">
+                              <div className="overflow-x-auto border rounded-lg">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                      <TableHead className="font-semibold">{stat.type === 'age_groups' ? 'Tranche d\'âge' : stat.name}</TableHead>
+                                      <TableHead className="font-semibold text-center">Effectif</TableHead>
+                                      <TableHead className="font-semibold text-center">Pourcentage</TableHead>
                                     </TableRow>
-                                  ))}
-                                  {stat.frequencies && stat.frequencies.length > 10 && (
-                                    <TableRow>
-                                      <TableCell colSpan={3} className="text-sm text-muted-foreground italic">
-                                        ... et {stat.frequencies.length - 10} autres valeurs
-                                      </TableCell>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {stat.frequencies?.map((freq, idx) => (
+                                      <TableRow key={idx}>
+                                        <TableCell className="font-medium">{freq.value}</TableCell>
+                                        <TableCell className="text-center">{freq.count}</TableCell>
+                                        <TableCell className="text-center">{freq.percentage}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                    <TableRow className="font-bold bg-muted/30 border-t-2">
+                                      <TableCell>Total</TableCell>
+                                      <TableCell className="text-center">{stat.count}</TableCell>
+                                      <TableCell className="text-center">100,0</TableCell>
                                     </TableRow>
-                                  )}
-                                  <TableRow className="font-semibold bg-muted/50">
-                                    <TableCell>Total</TableCell>
-                                    <TableCell>{stat.count}</TableCell>
-                                    <TableCell>100%</TableCell>
-                                  </TableRow>
-                                </TableBody>
-                              </Table>
-                              {stat.missing > 0 && (
-                                <p className="text-sm text-muted-foreground mt-2">
-                                  Valeurs manquantes : {stat.missing}
-                                </p>
+                                  </TableBody>
+                                </Table>
+                                {stat.missing > 0 && (
+                                  <div className="p-2 text-sm text-muted-foreground border-t">
+                                    Valeurs manquantes : {stat.missing}
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {stat.frequencies && stat.frequencies.length <= 10 && (
+                                <div>
+                                  <h4 className="text-sm font-semibold mb-3 text-center">Répartition graphique</h4>
+                                  <ResponsiveContainer width="100%" height={300}>
+                                    <PieChart>
+                                      <Pie
+                                        data={stat.frequencies.map(f => ({ name: f.value, value: f.count }))}
+                                        cx="50%"
+                                        cy="50%"
+                                        labelLine={false}
+                                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                                        outerRadius={80}
+                                        fill="#8884d8"
+                                        dataKey="value"
+                                      >
+                                        {stat.frequencies.map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                      </Pie>
+                                      <Tooltip />
+                                    </PieChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              )}
+                              
+                              {stat.frequencies && stat.frequencies.length > 10 && (
+                                <div>
+                                  <h4 className="text-sm font-semibold mb-3 text-center">Répartition (Top 10)</h4>
+                                  <ResponsiveContainer width="100%" height={300}>
+                                    <BarChart data={stat.frequencies.slice(0, 10).map(f => ({ name: f.value, effectif: f.count }))}>
+                                      <CartesianGrid strokeDasharray="3 3" />
+                                      <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                                      <YAxis />
+                                      <Tooltip />
+                                      <Bar dataKey="effectif" fill="hsl(var(--primary))" />
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                                </div>
                               )}
                             </div>
                           )}
