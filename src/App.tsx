@@ -11,6 +11,7 @@ import DataAnalysis from "./pages/DataAnalysis";
 import StatisticalTests from "./pages/StatisticalTests";
 import Writing from "./pages/Writing";
 import Training from "./pages/Training";
+import TrainingModule from "./pages/TrainingModule";
 import Chi2Test from "./pages/tests/Chi2Test";
 import TTest from "./pages/tests/TTest";
 import TestAssistant from "./pages/tests/TestAssistant";
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/tests/assistant" element={<TestAssistant />} />
             <Route path="/writing" element={<Writing />} />
             <Route path="/training" element={<Training />} />
+            <Route path="/training/:moduleId" element={<TrainingModule />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

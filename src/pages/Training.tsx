@@ -2,12 +2,13 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3, GraduationCap, ArrowLeft, BookOpen, Award, CheckCircle } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 
 const Training = () => {
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const modules = [
     {
@@ -171,6 +172,10 @@ const Training = () => {
                           variant={selectedModule === module.id ? "default" : "outline"}
                           className="flex-1"
                           size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/training/${module.id}`);
+                          }}
                         >
                           <BookOpen className="w-4 h-4 mr-2" />
                           Commencer
