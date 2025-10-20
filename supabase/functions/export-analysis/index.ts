@@ -11,8 +11,8 @@ serve(async (req) => {
   }
 
   try {
-    const { analysisResult, format } = await req.json();
-    console.log(`Generating ${format} export...`);
+    const { analysisResult, format, chartImages } = await req.json();
+    console.log(`Generating ${format} export with ${Object.keys(chartImages || {}).length} charts...`);
 
     if (format === 'excel') {
       // Generate CSV content (Excel will open it)
@@ -30,11 +30,11 @@ serve(async (req) => {
         if (stat.type === 'numeric') {
           csvContent += 'Statistique,Valeur\n';
           csvContent += `Effectif,${stat.count}\n`;
-          csvContent += `Moyenne,${stat.mean}\n`;
-          csvContent += `Médiane,${stat.median}\n`;
-          csvContent += `Écart-type,${stat.std}\n`;
-          csvContent += `Minimum,${stat.min}\n`;
-          csvContent += `Maximum,${stat.max}\n`;
+          csvContent += `Moyenne,${stat.mean?.toFixed(2) || 'N/A'}\n`;
+          csvContent += `Médiane,${stat.median?.toFixed(2) || 'N/A'}\n`;
+          csvContent += `Écart-type,${stat.std?.toFixed(2) || 'N/A'}\n`;
+          csvContent += `Minimum,${stat.min?.toFixed(2) || 'N/A'}\n`;
+          csvContent += `Maximum,${stat.max?.toFixed(2) || 'N/A'}\n`;
           csvContent += `Valeurs manquantes,${stat.missing}\n`;
         } else {
           csvContent += `${stat.type === 'age_groups' ? 'Tranche d\'âge' : 'Valeur'},Effectif,Pourcentage\n`;
@@ -113,14 +113,24 @@ serve(async (req) => {
             <table>
               <tr><th>Statistique</th><th>Valeur</th></tr>
               <tr><td>Effectif</td><td>${stat.count}</td></tr>
-              <tr><td>Moyenne</td><td>${stat.mean}</td></tr>
-              <tr><td>Médiane</td><td>${stat.median}</td></tr>
-              <tr><td>Écart-type</td><td>${stat.std}</td></tr>
-              <tr><td>Minimum</td><td>${stat.min}</td></tr>
-              <tr><td>Maximum</td><td>${stat.max}</td></tr>
+              <tr><td>Moyenne</td><td>${stat.mean?.toFixed(2) || 'N/A'}</td></tr>
+              <tr><td>Médiane</td><td>${stat.median?.toFixed(2) || 'N/A'}</td></tr>
+              <tr><td>Écart-type</td><td>${stat.std?.toFixed(2) || 'N/A'}</td></tr>
+              <tr><td>Minimum</td><td>${stat.min?.toFixed(2) || 'N/A'}</td></tr>
+              <tr><td>Maximum</td><td>${stat.max?.toFixed(2) || 'N/A'}</td></tr>
               <tr><td>Valeurs manquantes</td><td>${stat.missing}</td></tr>
             </table>
           `;
+          
+          // Add chart if available
+          const chartKey = `bar-${stat.name}`;
+          if (chartImages && chartImages[chartKey]) {
+            html += `
+              <div style="margin: 20px 0;">
+                <img src="${chartImages[chartKey]}" style="max-width: 100%; height: auto;" alt="Graphique ${stat.name}" />
+              </div>
+            `;
+          }
         } else {
           html += `
             <table>
@@ -145,6 +155,28 @@ serve(async (req) => {
           `;
           if (stat.missing > 0) {
             html += `<p><em>Valeurs manquantes: ${stat.missing}</em></p>`;
+          }
+          
+          // Add charts if available
+          const pieChartKey = `pie-${stat.name}`;
+          const barChartKey = `bar-${stat.name}`;
+          
+          if (chartImages && chartImages[pieChartKey]) {
+            html += `
+              <div style="margin: 20px 0;">
+                <h4>Graphique en camembert</h4>
+                <img src="${chartImages[pieChartKey]}" style="max-width: 100%; height: auto;" alt="Camembert ${stat.name}" />
+              </div>
+            `;
+          }
+          
+          if (chartImages && chartImages[barChartKey]) {
+            html += `
+              <div style="margin: 20px 0;">
+                <h4>Graphique en barres</h4>
+                <img src="${chartImages[barChartKey]}" style="max-width: 100%; height: auto;" alt="Barres ${stat.name}" />
+              </div>
+            `;
           }
         }
         html += `</div>`;
