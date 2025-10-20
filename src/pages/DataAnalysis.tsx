@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import html2canvas from 'html2canvas';
 
 interface FrequencyItem {
   value: string;
@@ -106,134 +107,91 @@ const DataAnalysis = () => {
     }
   };
 
-  const downloadAsExcel = async () => {
+  const handleDownload = async (format: 'excel' | 'pdf' | 'word') => {
     if (!analysisResult) return;
 
     try {
       toast({
         title: "Génération en cours",
-        description: "Création du fichier CSV...",
+        description: `Capture des graphiques et création du fichier ${format.toUpperCase()}...`,
       });
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-analysis`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ analysisResult, format: 'excel' }),
+      // Capture all charts as images
+      const chartImages: { [key: string]: string } = {};
+      const chartElements = document.querySelectorAll('[data-chart-id]');
+      
+      for (const element of Array.from(chartElements)) {
+        const chartId = element.getAttribute('data-chart-id');
+        if (chartId) {
+          try {
+            const canvas = await html2canvas(element as HTMLElement, {
+              backgroundColor: '#ffffff',
+              scale: 2
+            });
+            chartImages[chartId] = canvas.toDataURL('image/png');
+          } catch (err) {
+            console.error(`Error capturing chart ${chartId}:`, err);
+          }
         }
-      );
-
-      if (!response.ok) throw new Error('Erreur lors de la génération du fichier');
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `analyse_${analysisResult.fileName}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      toast({
-        title: "Téléchargement réussi",
-        description: "Le fichier CSV a été téléchargé",
-      });
-    } catch (error: any) {
-      console.error('Error downloading Excel:', error);
-      toast({
-        title: "Erreur",
-        description: error.message || "Impossible de générer le fichier",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const downloadAsPDF = async () => {
-    if (!analysisResult) return;
-
-    try {
-      toast({
-        title: "Génération en cours",
-        description: "Création du fichier PDF...",
-      });
-
-      const { data, error } = await supabase.functions.invoke('export-analysis', {
-        body: { analysisResult, format: 'pdf' },
-      });
-
-      if (error) throw error;
-
-      // Open print dialog with the HTML content
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(data.html);
-        printWindow.document.close();
-        setTimeout(() => {
-          printWindow.print();
-        }, 250);
       }
 
-      toast({
-        title: "PDF prêt",
-        description: "Utilisez la boîte de dialogue d'impression pour sauvegarder en PDF",
-      });
-    } catch (error: any) {
-      console.error('Error generating PDF:', error);
-      toast({
-        title: "Erreur",
-        description: error.message || "Impossible de générer le PDF",
-        variant: "destructive",
-      });
-    }
-  };
+      if (format === 'pdf') {
+        const { data, error } = await supabase.functions.invoke('export-analysis', {
+          body: { analysisResult, format, chartImages }
+        });
 
-  const downloadAsWord = async () => {
-    if (!analysisResult) return;
+        if (error) throw error;
 
-    try {
-      toast({
-        title: "Génération en cours",
-        description: "Création du document Word...",
-      });
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-analysis`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ analysisResult, format: 'word' }),
+        // Open print dialog with the HTML content
+        const printWindow = window.open('', '_blank');
+        if (printWindow && data.html) {
+          printWindow.document.write(data.html);
+          printWindow.document.close();
+          setTimeout(() => {
+            printWindow.print();
+          }, 250);
         }
-      );
 
-      if (!response.ok) throw new Error('Erreur lors de la génération du fichier');
+        toast({
+          title: "PDF prêt",
+          description: "Utilisez la boîte de dialogue d'impression pour sauvegarder en PDF",
+        });
+      } else {
+        // For Excel and Word, handle the response properly
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-analysis`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({ analysisResult, format, chartImages })
+          }
+        );
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `analyse_${analysisResult.fileName}.doc`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+        if (!response.ok) throw new Error('Erreur lors de la génération du fichier');
 
-      toast({
-        title: "Téléchargement réussi",
-        description: "Le document Word a été téléchargé",
-      });
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `analyse_${analysisResult.fileName}.${format === 'excel' ? 'csv' : 'doc'}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        toast({
+          title: "Téléchargement réussi",
+          description: `Le fichier ${format.toUpperCase()} a été téléchargé avec succès.`,
+        });
+      }
     } catch (error: any) {
-      console.error('Error downloading Word:', error);
+      console.error('Error downloading:', error);
       toast({
         title: "Erreur",
-        description: error.message || "Impossible de générer le document Word",
+        description: error.message || "Une erreur s'est produite lors du téléchargement.",
         variant: "destructive",
       });
     }
@@ -342,15 +300,15 @@ const DataAnalysis = () => {
                         <CardDescription>{analysisResult.fileName}</CardDescription>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={downloadAsExcel}>
+                        <Button variant="outline" size="sm" onClick={() => handleDownload('excel')}>
                           <FileSpreadsheet className="w-4 h-4 mr-2" />
                           Excel
                         </Button>
-                        <Button variant="outline" size="sm" onClick={downloadAsPDF}>
+                        <Button variant="outline" size="sm" onClick={() => handleDownload('pdf')}>
                           <FileText className="w-4 h-4 mr-2" />
                           PDF
                         </Button>
-                        <Button variant="outline" size="sm" onClick={downloadAsWord}>
+                        <Button variant="outline" size="sm" onClick={() => handleDownload('word')}>
                           <FileText className="w-4 h-4 mr-2" />
                           Word
                         </Button>
@@ -401,37 +359,62 @@ const DataAnalysis = () => {
                           
                           {stat.type === 'numeric' ? (
                             <div className="space-y-4">
-                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 p-4 bg-muted/50 rounded-lg">
-                                <div className="text-center">
-                                  <p className="text-xs text-muted-foreground mb-1">Effectif</p>
-                                  <p className="font-semibold text-lg">{stat.count}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-xs text-muted-foreground mb-1">Moyenne</p>
-                                  <p className="font-semibold text-lg">{stat.mean}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-xs text-muted-foreground mb-1">Médiane</p>
-                                  <p className="font-semibold text-lg">{stat.median}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-xs text-muted-foreground mb-1">Écart-type</p>
-                                  <p className="font-semibold text-lg">{stat.std}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-xs text-muted-foreground mb-1">Minimum</p>
-                                  <p className="font-semibold text-lg">{stat.min}</p>
-                                </div>
-                                <div className="text-center">
-                                  <p className="text-xs text-muted-foreground mb-1">Maximum</p>
-                                  <p className="font-semibold text-lg">{stat.max}</p>
-                                </div>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Statistique</TableHead>
+                                    <TableHead>Valeur</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  <TableRow>
+                                    <TableCell>Effectif</TableCell>
+                                    <TableCell>{stat.count}</TableCell>
+                                  </TableRow>
+                                  <TableRow>
+                                    <TableCell>Moyenne</TableCell>
+                                    <TableCell>{stat.mean?.toFixed(2)}</TableCell>
+                                  </TableRow>
+                                  <TableRow>
+                                    <TableCell>Médiane</TableCell>
+                                    <TableCell>{stat.median?.toFixed(2)}</TableCell>
+                                  </TableRow>
+                                  <TableRow>
+                                    <TableCell>Écart-type</TableCell>
+                                    <TableCell>{stat.std?.toFixed(2)}</TableCell>
+                                  </TableRow>
+                                  <TableRow>
+                                    <TableCell>Minimum</TableCell>
+                                    <TableCell>{stat.min?.toFixed(2)}</TableCell>
+                                  </TableRow>
+                                  <TableRow>
+                                    <TableCell>Maximum</TableCell>
+                                    <TableCell>{stat.max?.toFixed(2)}</TableCell>
+                                  </TableRow>
+                                  <TableRow>
+                                    <TableCell>Valeurs manquantes</TableCell>
+                                    <TableCell>{stat.missing}</TableCell>
+                                  </TableRow>
+                                </TableBody>
+                              </Table>
+                              
+                              <div data-chart-id={`bar-${stat.name}`}>
+                                <h4 className="text-sm font-semibold mb-3 text-center">Statistiques résumées</h4>
+                                <ResponsiveContainer width="100%" height={300}>
+                                  <BarChart data={[
+                                    { name: 'Min', value: stat.min || 0 },
+                                    { name: 'Moyenne', value: stat.mean || 0 },
+                                    { name: 'Médiane', value: stat.median || 0 },
+                                    { name: 'Max', value: stat.max || 0 }
+                                  ]}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="name" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Bar dataKey="value" fill="hsl(var(--primary))" />
+                                  </BarChart>
+                                </ResponsiveContainer>
                               </div>
-                              {stat.missing > 0 && (
-                                <p className="text-sm text-muted-foreground">
-                                  Valeurs manquantes : {stat.missing}
-                                </p>
-                              )}
                             </div>
                           ) : (
                             <div className="grid md:grid-cols-2 gap-6">
@@ -467,7 +450,7 @@ const DataAnalysis = () => {
                               </div>
                               
                               {stat.frequencies && stat.frequencies.length <= 10 && (
-                                <div>
+                                <div data-chart-id={`pie-${stat.name}`}>
                                   <h4 className="text-sm font-semibold mb-3 text-center">Répartition graphique</h4>
                                   <ResponsiveContainer width="100%" height={300}>
                                     <PieChart>
@@ -492,7 +475,7 @@ const DataAnalysis = () => {
                               )}
                               
                               {stat.frequencies && stat.frequencies.length > 10 && (
-                                <div>
+                                <div data-chart-id={`bar-${stat.name}`}>
                                   <h4 className="text-sm font-semibold mb-3 text-center">Répartition (Top 10)</h4>
                                   <ResponsiveContainer width="100%" height={300}>
                                     <BarChart data={stat.frequencies.slice(0, 10).map(f => ({ name: f.value, effectif: f.count }))}>
