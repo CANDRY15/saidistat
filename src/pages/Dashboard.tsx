@@ -137,6 +137,20 @@ const Dashboard = () => {
               </CardHeader>
             </Card>
           </Link>
+
+          <Link to="/exercises">
+            <Card className="group hover:shadow-xl transition-all duration-300 border-border hover:border-accent/50 cursor-pointer h-full">
+              <CardHeader>
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-accent to-accent flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Calculator className="w-6 h-6 text-foreground" />
+                </div>
+                <CardTitle>Exercices pratiques</CardTitle>
+                <CardDescription>
+                  Résolvez vos exercices de TP et devoirs en entrant vos données (UNILU)
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
         </div>
 
         {/* Recent projects */}

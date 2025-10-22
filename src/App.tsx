@@ -14,6 +14,11 @@ import StatisticalTests from "./pages/StatisticalTests";
 import Writing from "./pages/Writing";
 import Training from "./pages/Training";
 import TrainingModule from "./pages/TrainingModule";
+import Exercises from "./pages/Exercises";
+import DescriptiveStats from "./pages/exercises/DescriptiveStats";
+import Percentiles from "./pages/exercises/Percentiles";
+import Probability from "./pages/exercises/Probability";
+import VariableTypes from "./pages/exercises/VariableTypes";
 import NotFound from "./pages/NotFound";
 
 // Test pages
@@ -42,6 +47,11 @@ const App = () => (
             <Route path="/writing" element={<Writing />} />
             <Route path="/training" element={<Training />} />
             <Route path="/training/:moduleId" element={<TrainingModule />} />
+            <Route path="/exercises" element={<Exercises />} />
+            <Route path="/exercises/descriptive-stats" element={<DescriptiveStats />} />
+            <Route path="/exercises/percentiles" element={<Percentiles />} />
+            <Route path="/exercises/probability" element={<Probability />} />
+            <Route path="/exercises/variable-types" element={<VariableTypes />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
