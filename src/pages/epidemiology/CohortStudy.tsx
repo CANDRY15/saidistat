@@ -23,6 +23,12 @@ export default function CohortStudy() {
     const icne = val_c / (val_c + val_d);
     const rr = ice / icne;
     
+    // Calcul IC95% du RR
+    const lnRR = Math.log(rr);
+    const seLnRR = Math.sqrt((1/val_a) - (1/(val_a + val_b)) + (1/val_c) - (1/(val_c + val_d)));
+    const ic95Lower = Math.exp(lnRR - 1.96 * seLnRR);
+    const ic95Upper = Math.exp(lnRR + 1.96 * seLnRR);
+    
     let interpretation = "";
     let ra = null;
     let fere = null;
@@ -48,6 +54,10 @@ export default function CohortStudy() {
       ice: ice * 100,
       icne: icne * 100,
       rr,
+      lnRR,
+      seLnRR,
+      ic95Lower,
+      ic95Upper,
       interpretation,
       ra: ra ? ra * 100 : null,
       fere,
@@ -132,7 +142,7 @@ export default function CohortStudy() {
             </div>
 
             <Button onClick={calculate} className="w-full">
-              Calculer le RR et les mesures d'impact
+              Calculer le RR, l'IC95% et les mesures d'impact
             </Button>
           </Card>
 
@@ -238,9 +248,75 @@ export default function CohortStudy() {
                   </div>
                 </div>
 
+                <div className="bg-muted/50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-lg mb-2">4. Intervalle de Confiance 95% du RR</h4>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm font-semibold mb-1">Étape 1: Calcul du ln(RR)</p>
+                      <div className="font-mono text-sm">
+                        ln(RR) = ln({results.rr.toFixed(2)}) = {results.lnRR.toFixed(4)}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold mb-1">Étape 2: Calcul de SE(ln(RR))</p>
+                      <div className="font-mono text-sm mb-1">
+                        SE(ln(RR)) = √[(1/A) - (1/(A+B)) + (1/C) - (1/(C+D))]
+                      </div>
+                      <div className="font-mono text-sm mb-1">
+                        SE(ln(RR)) = √[(1/{results.a}) - (1/{results.exposes}) + (1/{results.c}) - (1/{results.nonExposes})]
+                      </div>
+                      <div className="font-mono text-sm">
+                        SE(ln(RR)) = {results.seLnRR.toFixed(4)}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold mb-1">Étape 3: Calcul de l'IC95%</p>
+                      <div className="font-mono text-sm mb-1">
+                        IC95% = exp[ln(RR) ± 1.96 × SE(ln(RR))]
+                      </div>
+                      <div className="font-mono text-sm mb-1">
+                        Borne inférieure = exp[{results.lnRR.toFixed(4)} - 1.96 × {results.seLnRR.toFixed(4)}]
+                      </div>
+                      <div className="font-mono text-sm mb-1">
+                        Borne inférieure = exp[{(results.lnRR - 1.96 * results.seLnRR).toFixed(4)}]
+                      </div>
+                      <div className="font-mono text-sm mb-3">
+                        Borne supérieure = exp[{(results.lnRR + 1.96 * results.seLnRR).toFixed(4)}]
+                      </div>
+                      
+                      <div className="text-xl font-bold text-primary">
+                        IC95% = [{results.ic95Lower.toFixed(2)} ; {results.ic95Upper.toFixed(2)}]
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-background rounded border-l-4 border-primary mt-3">
+                      <p className="font-semibold mb-2">Interprétation de l'IC95%:</p>
+                      {results.ic95Lower > 1 ? (
+                        <p className="text-green-600 dark:text-green-400">
+                          ✓ L'association est statistiquement significative (IC ne contient pas 1).
+                          L'exposition est un facteur de risque confirmé.
+                        </p>
+                      ) : results.ic95Upper < 1 ? (
+                        <p className="text-blue-600 dark:text-blue-400">
+                          ✓ L'association est statistiquement significative (IC ne contient pas 1).
+                          L'exposition est un facteur protecteur confirmé.
+                        </p>
+                      ) : (
+                        <p className="text-orange-600 dark:text-orange-400">
+                          ✗ L'association n'est pas statistiquement significative (IC contient 1).
+                          On ne peut pas conclure à une association entre l'exposition et la maladie.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {results.ra !== null && (
                   <div className="bg-muted/50 p-4 rounded-lg">
-                    <h4 className="font-semibold text-lg mb-2">4. Risque Attribuable (RA)</h4>
+                    <h4 className="font-semibold text-lg mb-2">5. Risque Attribuable (RA)</h4>
                     <p className="text-sm text-muted-foreground mb-2">
                       Excès de risque dû à l'exposition
                     </p>
@@ -258,7 +334,7 @@ export default function CohortStudy() {
 
                 {results.fere !== null && (
                   <div className="bg-muted/50 p-4 rounded-lg">
-                    <h4 className="font-semibold text-lg mb-2">5. Fraction Étiologique du Risque chez les Exposés (FERe)</h4>
+                    <h4 className="font-semibold text-lg mb-2">6. Fraction Étiologique du Risque chez les Exposés (FERe)</h4>
                     <p className="text-sm text-muted-foreground mb-2">
                       Proportion de cas attribuables à l'exposition chez les exposés
                     </p>
@@ -284,7 +360,7 @@ export default function CohortStudy() {
 
                 {results.ferp !== null && (
                   <div className="bg-muted/50 p-4 rounded-lg">
-                    <h4 className="font-semibold text-lg mb-2">6. Fraction Étiologique du Risque dans la Population (FERp)</h4>
+                    <h4 className="font-semibold text-lg mb-2">7. Fraction Étiologique du Risque dans la Population (FERp)</h4>
                     <p className="text-sm text-muted-foreground mb-2">
                       Proportion de cas dans la population attribuables à l'exposition
                     </p>
