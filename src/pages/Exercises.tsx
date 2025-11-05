@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link, useNavigate } from "react-router-dom";
-import { BarChart3, Calculator, ArrowLeft, FileText, TrendingUp, PieChart, Percent } from "lucide-react";
+import { BarChart3, Calculator, ArrowLeft, FileText, TrendingUp, PieChart, Percent, Target, Users, GitCompare } from "lucide-react";
 
 const Exercises = () => {
   const navigate = useNavigate();
@@ -15,6 +15,30 @@ const Exercises = () => {
       icon: TrendingUp,
       path: "/exercises/descriptive-stats",
       color: "text-blue-500"
+    },
+    {
+      id: "z-score",
+      title: "Z-Score",
+      description: "Calculez le z-score pour standardiser vos données",
+      icon: Target,
+      path: "/exercises/z-score",
+      color: "text-cyan-500"
+    },
+    {
+      id: "sample-size",
+      title: "Taille d'Échantillon",
+      description: "Déterminez la taille d'échantillon nécessaire pour votre étude",
+      icon: Users,
+      path: "/exercises/sample-size",
+      color: "text-indigo-500"
+    },
+    {
+      id: "two-means",
+      title: "Comparaison de Deux Moyennes",
+      description: "Test t de Student pour comparer deux groupes indépendants",
+      icon: GitCompare,
+      path: "/exercises/two-means",
+      color: "text-pink-500"
     },
     {
       id: "percentiles",

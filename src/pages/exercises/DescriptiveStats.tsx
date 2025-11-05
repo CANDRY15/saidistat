@@ -312,9 +312,10 @@ const DescriptiveStats = () => {
                         <thead>
                           <tr className="bg-muted">
                             <th className="border border-border p-2 text-left">Classes</th>
-                            <th className="border border-border p-2 text-center">Centre de classe (xᵢ)</th>
-                            <th className="border border-border p-2 text-center">Effectif (nᵢ)</th>
-                            <th className="border border-border p-2 text-center">Fréquence relative (%)</th>
+                            <th className="border border-border p-2 text-center">Xᵢ (Centre)</th>
+                            <th className="border border-border p-2 text-center">fᵢ (Effectif)</th>
+                            <th className="border border-border p-2 text-center">Xᵢ × fᵢ</th>
+                            <th className="border border-border p-2 text-center">Fréq. relative (%)</th>
                             <th className="border border-border p-2 text-center">Effectif cumulé</th>
                           </tr>
                         </thead>
@@ -324,13 +325,16 @@ const DescriptiveStats = () => {
                               <td className="border border-border p-2 font-mono text-xs">{row.interval}</td>
                               <td className="border border-border p-2 text-center font-mono">{row.midpoint.toFixed(2)}</td>
                               <td className="border border-border p-2 text-center font-bold">{row.frequency}</td>
+                              <td className="border border-border p-2 text-center font-mono">{(row.midpoint * row.frequency).toFixed(2)}</td>
                               <td className="border border-border p-2 text-center">{row.relativeFrequency.toFixed(2)}%</td>
                               <td className="border border-border p-2 text-center">{row.cumulativeFrequency}</td>
                             </tr>
                           ))}
                           <tr className="bg-primary/10 font-bold">
-                            <td className="border border-border p-2" colSpan={2}>Total</td>
+                            <td className="border border-border p-2">Total</td>
+                            <td className="border border-border p-2 text-center">-</td>
                             <td className="border border-border p-2 text-center">{results.count}</td>
+                            <td className="border border-border p-2 text-center font-mono">{results.frequencyTable.reduce((sum, row) => sum + (row.midpoint * row.frequency), 0).toFixed(2)}</td>
                             <td className="border border-border p-2 text-center">100%</td>
                             <td className="border border-border p-2 text-center">-</td>
                           </tr>

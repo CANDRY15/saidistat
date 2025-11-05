@@ -16,6 +16,9 @@ import Training from "./pages/Training";
 import TrainingModule from "./pages/TrainingModule";
 import Exercises from "./pages/Exercises";
 import DescriptiveStats from "./pages/exercises/DescriptiveStats";
+import ZScore from "./pages/exercises/ZScore";
+import SampleSize from "./pages/exercises/SampleSize";
+import TwoMeansComparison from "./pages/exercises/TwoMeansComparison";
 import Percentiles from "./pages/exercises/Percentiles";
 import Probability from "./pages/exercises/Probability";
 import VariableTypes from "./pages/exercises/VariableTypes";
@@ -58,6 +61,9 @@ const App = () => (
             <Route path="/training/:moduleId" element={<TrainingModule />} />
             <Route path="/exercises" element={<Exercises />} />
             <Route path="/exercises/descriptive-stats" element={<DescriptiveStats />} />
+            <Route path="/exercises/z-score" element={<ZScore />} />
+            <Route path="/exercises/sample-size" element={<SampleSize />} />
+            <Route path="/exercises/two-means" element={<TwoMeansComparison />} />
             <Route path="/exercises/percentiles" element={<Percentiles />} />
             <Route path="/exercises/probability" element={<Probability />} />
             <Route path="/exercises/variable-types" element={<VariableTypes />} />
