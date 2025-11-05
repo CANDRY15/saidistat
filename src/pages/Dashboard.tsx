@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, FileText, GraduationCap, Upload, TrendingUp, Calculator } from "lucide-react";
+import { BarChart3, FileText, GraduationCap, Upload, TrendingUp, Calculator, Activity } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -144,9 +144,23 @@ const Dashboard = () => {
                 <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-accent to-accent flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                   <Calculator className="w-6 h-6 text-foreground" />
                 </div>
-                <CardTitle>Exercices pratiques</CardTitle>
+                <CardTitle>Exercices Biostatistiques</CardTitle>
                 <CardDescription>
-                  Résolvez vos exercices de TP et devoirs en entrant vos données (UNILU)
+                  Résolvez vos exercices de biostatistiques et TP (UNILU)
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link to="/epidemiology">
+            <Card className="group hover:shadow-xl transition-all duration-300 border-border hover:border-secondary/50 cursor-pointer h-full">
+              <CardHeader>
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-secondary to-secondary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Activity className="w-6 h-6 text-primary-foreground" />
+                </div>
+                <CardTitle>Exercices d'Épidémiologie</CardTitle>
+                <CardDescription>
+                  Tests diagnostiques, études de cohorte, cas-témoins, mesures de fréquence
                 </CardDescription>
               </CardHeader>
             </Card>

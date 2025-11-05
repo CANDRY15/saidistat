@@ -26,6 +26,15 @@ import Chi2Test from "./pages/tests/Chi2Test";
 import TTest from "./pages/tests/TTest";
 import TestAssistant from "./pages/tests/TestAssistant";
 
+// Epidemiology pages
+import EpidemiologyExercises from "./pages/EpidemiologyExercises";
+import DiagnosticTest from "./pages/epidemiology/DiagnosticTest";
+import CohortStudy from "./pages/epidemiology/CohortStudy";
+import CaseControl from "./pages/epidemiology/CaseControl";
+import FrequencyMeasures from "./pages/epidemiology/FrequencyMeasures";
+import MortalityRates from "./pages/epidemiology/MortalityRates";
+import StudyIdentifier from "./pages/epidemiology/StudyIdentifier";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -52,6 +61,13 @@ const App = () => (
             <Route path="/exercises/percentiles" element={<Percentiles />} />
             <Route path="/exercises/probability" element={<Probability />} />
             <Route path="/exercises/variable-types" element={<VariableTypes />} />
+            <Route path="/epidemiology" element={<EpidemiologyExercises />} />
+            <Route path="/epidemiology/diagnostic-test" element={<DiagnosticTest />} />
+            <Route path="/epidemiology/cohort-study" element={<CohortStudy />} />
+            <Route path="/epidemiology/case-control" element={<CaseControl />} />
+            <Route path="/epidemiology/frequency-measures" element={<FrequencyMeasures />} />
+            <Route path="/epidemiology/mortality-rates" element={<MortalityRates />} />
+            <Route path="/epidemiology/study-identifier" element={<StudyIdentifier />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
