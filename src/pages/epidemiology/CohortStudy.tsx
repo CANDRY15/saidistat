@@ -23,11 +23,21 @@ export default function CohortStudy() {
     const icne = val_c / (val_c + val_d);
     const rr = ice / icne;
     
-    // Calcul IC95% du RR
-    const lnRR = Math.log(rr);
-    const seLnRR = Math.sqrt((1/val_a) - (1/(val_a + val_b)) + (1/val_c) - (1/(val_c + val_d)));
-    const ic95Lower = Math.exp(lnRR - 1.96 * seLnRR);
-    const ic95Upper = Math.exp(lnRR + 1.96 * seLnRR);
+    // Calcul χ² (chi-carré)
+    const n = val_a + val_b + val_c + val_d;
+    const m1 = val_a + val_c; // Total malades
+    const m0 = val_b + val_d; // Total non malades
+    const e1 = val_a + val_b; // Total exposés
+    const e0 = val_c + val_d; // Total non exposés
+    
+    const numerateur = Math.pow((val_a * val_d - val_b * val_c), 2) * n;
+    const denominateur = m1 * m0 * e1 * e0;
+    const chi2 = numerateur / denominateur;
+    
+    // Calcul IC95% du RR avec χ²
+    const facteur = 1.96 / Math.sqrt(chi2);
+    const ic95Lower = Math.pow(rr, 1 - facteur);
+    const ic95Upper = Math.pow(rr, 1 + facteur);
     
     let interpretation = "";
     let ra = null;
@@ -54,8 +64,8 @@ export default function CohortStudy() {
       ice: ice * 100,
       icne: icne * 100,
       rr,
-      lnRR,
-      seLnRR,
+      chi2,
+      facteur,
       ic95Lower,
       ic95Upper,
       interpretation,
@@ -63,11 +73,13 @@ export default function CohortStudy() {
       fere,
       ferp,
       pe: pe ? pe * 100 : null,
-      exposes: val_a + val_b,
-      nonExposes: val_c + val_d,
-      malades: val_a + val_c,
-      nonMalades: val_b + val_d,
-      total: val_a + val_b + val_c + val_d,
+      exposes: e1,
+      nonExposes: e0,
+      malades: m1,
+      nonMalades: m0,
+      total: n,
+      numerateur,
+      denominateur,
     });
   };
 
@@ -253,42 +265,78 @@ export default function CohortStudy() {
                   
                   <div className="space-y-3">
                     <div>
-                      <p className="text-sm font-semibold mb-1">Étape 1: Calcul du ln(RR)</p>
-                      <div className="font-mono text-sm">
-                        ln(RR) = ln({results.rr.toFixed(2)}) = {results.lnRR.toFixed(4)}
+                      <p className="text-sm font-semibold mb-1">Étape 1: Calcul du χ² (chi-carré)</p>
+                      <div className="font-mono text-sm mb-1">
+                        χ² = [a.d - b.c]².n / (M1.M0)(E1.E0)
+                      </div>
+                      <div className="font-mono text-sm mb-1">
+                        Où: M1 = a + c = {results.malades} (total malades)
+                      </div>
+                      <div className="font-mono text-sm mb-1">
+                        M0 = b + d = {results.nonMalades} (total non malades)
+                      </div>
+                      <div className="font-mono text-sm mb-1">
+                        E1 = a + b = {results.exposes} (total exposés)
+                      </div>
+                      <div className="font-mono text-sm mb-1">
+                        E0 = c + d = {results.nonExposes} (total non exposés)
+                      </div>
+                      <div className="font-mono text-sm mb-2">
+                        n = {results.total}
+                      </div>
+                      <div className="font-mono text-sm mb-1">
+                        χ² = [({results.a} × {results.d}) - ({results.b} × {results.c})]² × {results.total} / ({results.malades} × {results.nonMalades} × {results.exposes} × {results.nonExposes})
+                      </div>
+                      <div className="font-mono text-sm mb-1">
+                        χ² = {results.numerateur.toFixed(0)} / {results.denominateur.toFixed(0)}
+                      </div>
+                      <div className="font-mono text-sm font-bold">
+                        χ² = {results.chi2.toFixed(5)}
                       </div>
                     </div>
 
                     <div>
-                      <p className="text-sm font-semibold mb-1">Étape 2: Calcul de SE(ln(RR))</p>
+                      <p className="text-sm font-semibold mb-1">Étape 2: Calcul du facteur (1,96 / √χ²)</p>
                       <div className="font-mono text-sm mb-1">
-                        SE(ln(RR)) = √[(1/A) - (1/(A+B)) + (1/C) - (1/(C+D))]
+                        Facteur = 1,96 / √χ²
                       </div>
                       <div className="font-mono text-sm mb-1">
-                        SE(ln(RR)) = √[(1/{results.a}) - (1/{results.exposes}) + (1/{results.c}) - (1/{results.nonExposes})]
+                        Facteur = 1,96 / √{results.chi2.toFixed(5)}
                       </div>
-                      <div className="font-mono text-sm">
-                        SE(ln(RR)) = {results.seLnRR.toFixed(4)}
+                      <div className="font-mono text-sm mb-1">
+                        Facteur = 1,96 / {Math.sqrt(results.chi2).toFixed(5)}
+                      </div>
+                      <div className="font-mono text-sm font-bold">
+                        Facteur = {results.facteur.toFixed(5)}
                       </div>
                     </div>
 
                     <div>
                       <p className="text-sm font-semibold mb-1">Étape 3: Calcul de l'IC95%</p>
                       <div className="font-mono text-sm mb-1">
-                        IC95% = exp[ln(RR) ± 1.96 × SE(ln(RR))]
+                        IC95% = RR^(1 ± facteur)
                       </div>
                       <div className="font-mono text-sm mb-1">
-                        Borne inférieure = exp[{results.lnRR.toFixed(4)} - 1.96 × {results.seLnRR.toFixed(4)}]
+                        Borne inférieure = RR^(1 - {results.facteur.toFixed(5)})
                       </div>
                       <div className="font-mono text-sm mb-1">
-                        Borne inférieure = exp[{(results.lnRR - 1.96 * results.seLnRR).toFixed(4)}]
+                        Borne inférieure = {results.rr.toFixed(5)}^{(1 - results.facteur).toFixed(5)}
+                      </div>
+                      <div className="font-mono text-sm mb-2">
+                        Borne inférieure = {results.ic95Lower.toFixed(4)}
+                      </div>
+                      <div className="font-mono text-sm mb-1">
+                        Borne supérieure = RR^(1 + {results.facteur.toFixed(5)})
+                      </div>
+                      <div className="font-mono text-sm mb-1">
+                        Borne supérieure = {results.rr.toFixed(5)}^{(1 + results.facteur).toFixed(5)}
                       </div>
                       <div className="font-mono text-sm mb-3">
-                        Borne supérieure = exp[{(results.lnRR + 1.96 * results.seLnRR).toFixed(4)}]
+                        Borne supérieure = {results.ic95Upper.toFixed(4)}
                       </div>
                       
                       <div className="text-xl font-bold text-primary">
-                        IC95% = [{results.ic95Lower.toFixed(2)} ; {results.ic95Upper.toFixed(2)}]
+                        IC95% = ({results.ic95Lower.toFixed(4)} ; {results.ic95Upper.toFixed(4)})
                       </div>
                     </div>
 
