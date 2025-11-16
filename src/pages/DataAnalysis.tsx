@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Upload, Database, ArrowLeft, TrendingUp, FileText, FileSpreadsheet, Check, Link2 } from "lucide-react";
+import { BarChart3, Upload, Database, ArrowLeft, TrendingUp, FileText, FileSpreadsheet, Check, Link2, Save, FolderOpen, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -9,9 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter } from 'recharts';
 import html2canvas from 'html2canvas';
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface FrequencyItem {
   value: string;
@@ -34,16 +36,8 @@ interface ColumnStats {
   frequencies?: FrequencyItem[];
 }
 
-interface AnalysisResult {
-  fileName: string;
-  rowCount: number;
-  columnCount: number;
-  columns: string[];
-  statistics: ColumnStats[];
-  preview: any[];
-}
-
 type AnalysisType = 'frequency' | 'association' | 'advanced' | null;
+type AnalysisSubType = 'chi2' | 'correlation' | 'ttest' | 'anova' | 'regression' | null;
 
 const DataAnalysis = () => {
   const { user } = useAuth();
@@ -52,9 +46,38 @@ const DataAnalysis = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadedData, setUploadedData] = useState<any>(null);
   const [analysisType, setAnalysisType] = useState<AnalysisType>(null);
+  const [analysisSubType, setAnalysisSubType] = useState<AnalysisSubType>(null);
   const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [showRawData, setShowRawData] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [savedAnalyses, setSavedAnalyses] = useState<any[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [analysisName, setAnalysisName] = useState("");
+  const [showLoadDialog, setShowLoadDialog] = useState(false);
+  const rowsPerPage = 10;
+
+  useEffect(() => {
+    if (user) {
+      loadSavedAnalyses();
+    }
+  }, [user]);
+
+  const loadSavedAnalyses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('saved_analyses')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setSavedAnalyses(data || []);
+    } catch (error: any) {
+      console.error('Error loading saved analyses:', error);
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -65,7 +88,6 @@ const DataAnalysis = () => {
       if (validTypes.includes(fileExtension)) {
         setSelectedFile(file);
         
-        // Auto-load data for preview
         try {
           const formData = new FormData();
           formData.append('file', file);
@@ -111,30 +133,123 @@ const DataAnalysis = () => {
     });
 
     try {
-      // Filter statistics for selected variables only
-      const filteredStats = uploadedData.statistics.filter((stat: ColumnStats) => 
-        selectedVariables.includes(stat.name)
-      );
+      let results: any = {};
 
-      setAnalysisResult({
-        ...uploadedData,
-        statistics: filteredStats
-      });
+      if (analysisType === 'frequency') {
+        const filteredStats = uploadedData.statistics.filter((stat: ColumnStats) => 
+          selectedVariables.includes(stat.name)
+        );
+        
+        results = {
+          type: 'frequency',
+          statistics: filteredStats
+        };
+      } else if (analysisType === 'association') {
+        if (!analysisSubType) {
+          throw new Error('Veuillez sélectionner un type d\'analyse d\'association');
+        }
 
+        const { data, error } = await supabase.functions.invoke('association-analysis', {
+          body: {
+            data: uploadedData.preview,
+            variables: selectedVariables,
+            analysisSubType
+          }
+        });
+
+        if (error) throw error;
+        
+        results = {
+          type: 'association',
+          subType: analysisSubType,
+          ...data
+        };
+      } else if (analysisType === 'advanced') {
+        if (!analysisSubType) {
+          throw new Error('Veuillez sélectionner un type d\'analyse avancée');
+        }
+
+        const { data, error } = await supabase.functions.invoke('advanced-analysis', {
+          body: {
+            data: uploadedData.preview,
+            variables: selectedVariables,
+            analysisSubType
+          }
+        });
+
+        if (error) throw error;
+        
+        results = {
+          type: 'advanced',
+          subType: analysisSubType,
+          ...data
+        };
+      }
+      
+      setAnalysisResult(results);
+      
       toast({
         title: "Analyse terminée",
-        description: `Analyse ${analysisType === 'frequency' ? 'de fréquence' : analysisType === 'association' ? 'd\'association' : 'avancée'} complétée`,
+        description: `${selectedVariables.length} variable(s) analysée(s) avec succès`,
       });
     } catch (error: any) {
-      console.error('Error analyzing data:', error);
+      console.error('Analysis error:', error);
       toast({
         title: "Erreur d'analyse",
         description: error.message,
         variant: "destructive",
       });
+      setStep(3);
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const handleSaveAnalysis = async () => {
+    if (!analysisName.trim() || !analysisResult || !user) return;
+
+    try {
+      const { error } = await supabase
+        .from('saved_analyses')
+        .insert({
+          user_id: user.id,
+          analysis_name: analysisName.trim(),
+          analysis_type: analysisType!,
+          file_name: selectedFile?.name || 'Unknown',
+          selected_variables: selectedVariables,
+          results: analysisResult
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Analyse sauvegardée",
+        description: `"${analysisName}" a été sauvegardée avec succès`,
+      });
+
+      setShowSaveDialog(false);
+      setAnalysisName("");
+      loadSavedAnalyses();
+    } catch (error: any) {
+      toast({
+        title: "Erreur de sauvegarde",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleLoadAnalysis = (analysis: any) => {
+    setAnalysisResult(analysis.results);
+    setAnalysisType(analysis.analysis_type);
+    setSelectedVariables(analysis.selected_variables);
+    setStep(4);
+    setShowLoadDialog(false);
+    
+    toast({
+      title: "Analyse chargée",
+      description: `"${analysis.analysis_name}" a été chargée`,
+    });
   };
 
   const handleVariableToggle = (variable: string) => {
@@ -150,576 +265,456 @@ const DataAnalysis = () => {
     setSelectedFile(null);
     setUploadedData(null);
     setAnalysisType(null);
+    setAnalysisSubType(null);
     setSelectedVariables([]);
     setAnalysisResult(null);
+    setShowRawData(false);
+    setCurrentPage(1);
   };
 
-  const handleDownload = async (format: 'excel' | 'pdf' | 'word') => {
-    if (!analysisResult) return;
+  const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', '#8884d8', '#82ca9d', '#ffc658'];
 
-    try {
-      toast({
-        title: "Génération en cours",
-        description: `Capture des graphiques et création du fichier ${format.toUpperCase()}...`,
-      });
+  // Render raw data table with pagination
+  const renderRawDataTable = () => {
+    if (!uploadedData?.preview) return null;
 
-      // Capture all charts as images
-      const chartImages: { [key: string]: string } = {};
-      const chartElements = document.querySelectorAll('[data-chart-id]');
-      
-      for (const element of Array.from(chartElements)) {
-        const chartId = element.getAttribute('data-chart-id');
-        if (chartId) {
-          try {
-            const canvas = await html2canvas(element as HTMLElement, {
-              backgroundColor: '#ffffff',
-              scale: 2
-            });
-            chartImages[chartId] = canvas.toDataURL('image/png');
-          } catch (err) {
-            console.error(`Error capturing chart ${chartId}:`, err);
-          }
-        }
-      }
+    const startIdx = (currentPage - 1) * rowsPerPage;
+    const endIdx = startIdx + rowsPerPage;
+    const paginatedData = uploadedData.preview.slice(startIdx, endIdx);
+    const totalPages = Math.ceil(uploadedData.preview.length / rowsPerPage);
 
-      if (format === 'pdf') {
-        const { data, error } = await supabase.functions.invoke('export-analysis', {
-          body: { analysisResult, format, chartImages }
-        });
+    return (
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Données brutes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {uploadedData.columns.map((col: string) => (
+                    <TableHead key={col}>{col}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedData.map((row: any, idx: number) => (
+                  <TableRow key={idx}>
+                    {uploadedData.columns.map((col: string) => (
+                      <TableCell key={col}>{row[col]}</TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-sm text-muted-foreground">
+              Page {currentPage} sur {totalPages}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
-        if (error) throw error;
+  // Render frequency results
+  const renderFrequencyResults = () => {
+    if (!analysisResult || analysisResult.type !== 'frequency') return null;
 
-        const printWindow = window.open('', '_blank');
-        if (printWindow && data.html) {
-          printWindow.document.write(data.html);
-          printWindow.document.close();
-          setTimeout(() => {
-            printWindow.print();
-          }, 250);
-        }
+    return analysisResult.statistics.map((stat: ColumnStats) => (
+      <Card key={stat.name} className="mb-6">
+        <CardHeader>
+          <CardTitle>{stat.name}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {stat.frequencies && (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={stat.frequencies}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="value" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="count" fill="hsl(var(--primary))" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+    ));
+  };
 
-        toast({
-          title: "PDF prêt",
-          description: "Utilisez la boîte de dialogue d'impression pour sauvegarder en PDF",
-        });
-      } else {
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-analysis`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            },
-            body: JSON.stringify({ analysisResult, format, chartImages })
-          }
-        );
+  // Render association results
+  const renderAssociationResults = () => {
+    if (!analysisResult || analysisResult.type !== 'association') return null;
 
-        if (!response.ok) throw new Error('Erreur lors de la génération du fichier');
+    if (analysisResult.chi2Tests) {
+      return analysisResult.chi2Tests.map((test: any, idx: number) => (
+        <Card key={idx} className="mb-6">
+          <CardHeader>
+            <CardTitle>Chi² Test: {test.variable1} × {test.variable2}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">χ²</p>
+                <p className="text-xl font-bold">{test.chi2}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">p-value</p>
+                <p className="text-xl font-bold">{test.pValue}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Significatif</p>
+                <p className={`text-xl font-bold ${test.significant ? 'text-green-600' : 'text-red-600'}`}>
+                  {test.significant ? 'Oui' : 'Non'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ));
+    }
 
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `analyse_${analysisResult.fileName}.${format === 'excel' ? 'csv' : 'doc'}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-
-        toast({
-          title: "Téléchargement réussi",
-          description: `Le fichier ${format.toUpperCase()} a été téléchargé avec succès.`,
-        });
-      }
-    } catch (error: any) {
-      console.error('Error downloading:', error);
-      toast({
-        title: "Erreur",
-        description: error.message || "Une erreur s'est produite lors du téléchargement.",
-        variant: "destructive",
-      });
+    if (analysisResult.correlations) {
+      return analysisResult.correlations.map((corr: any, idx: number) => (
+        <Card key={idx} className="mb-6">
+          <CardHeader>
+            <CardTitle>Corrélation: {corr.variable1} × {corr.variable2}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">r</p>
+                <p className="text-xl font-bold">{corr.correlation}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">p-value</p>
+                <p className="text-xl font-bold">{corr.pValue}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Significatif</p>
+                <p className={`text-xl font-bold ${corr.significant ? 'text-green-600' : 'text-red-600'}`}>
+                  {corr.significant ? 'Oui' : 'Non'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ));
     }
   };
 
-  const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', '#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F', '#FFBB28'];
+  // Render advanced results
+  const renderAdvancedResults = () => {
+    if (!analysisResult || analysisResult.type !== 'advanced') return null;
+
+    if (analysisResult.tTests) {
+      return analysisResult.tTests.map((test: any, idx: number) => (
+        <Card key={idx} className="mb-6">
+          <CardHeader>
+            <CardTitle>Test t: {test.group1} vs {test.group2}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm">Moyenne 1</p>
+                <p className="font-bold">{test.mean1}</p>
+              </div>
+              <div>
+                <p className="text-sm">Moyenne 2</p>
+                <p className="font-bold">{test.mean2}</p>
+              </div>
+              <div>
+                <p className="text-sm">t</p>
+                <p className="font-bold">{test.tStatistic}</p>
+              </div>
+              <div>
+                <p className="text-sm">p-value</p>
+                <p className="font-bold">{test.pValue}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ));
+    }
+
+    if (analysisResult.anovaTests) {
+      return analysisResult.anovaTests.map((test: any, idx: number) => (
+        <Card key={idx} className="mb-6">
+          <CardHeader>
+            <CardTitle>ANOVA: {test.dependentVariable} par {test.independentVariable}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div>
+                <p className="text-sm">F</p>
+                <p className="font-bold">{test.fStatistic}</p>
+              </div>
+              <div>
+                <p className="text-sm">p-value</p>
+                <p className="font-bold">{test.pValue}</p>
+              </div>
+              <div>
+                <p className="text-sm">Significatif</p>
+                <p className={test.significant ? 'font-bold text-green-600' : 'font-bold text-red-600'}>
+                  {test.significant ? 'Oui' : 'Non'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ));
+    }
+
+    if (analysisResult.regressions) {
+      return analysisResult.regressions.map((reg: any, idx: number) => (
+        <Card key={idx} className="mb-6">
+          <CardHeader>
+            <CardTitle>Régression: {reg.dependentVariable}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm">R²</p>
+                <p className="font-bold">{reg.rSquared}</p>
+              </div>
+              <div>
+                <p className="text-sm">p-value</p>
+                <p className="font-bold">{reg.pValue}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ));
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-      {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link to="/dashboard" className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
                 <BarChart3 className="w-6 h-6 text-primary-foreground" />
               </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                BioStasmarT
-              </span>
+              <span className="text-2xl font-bold">BioStasmarT</span>
             </Link>
             <Link to="/dashboard">
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Retour au tableau de bord
+                Retour
               </Button>
             </Link>
           </div>
         </div>
       </header>
 
-      {/* Main content */}
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Analyse de données
-          </h1>
-          <p className="text-xl text-muted-foreground">
-            Workflow guidé pour analyser vos données en 4 étapes
-          </p>
-        </div>
+        <h1 className="text-4xl font-bold mb-8">Analyse de données</h1>
 
-        {/* Step Progress */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
-            {[
-              { num: 1, label: "Upload" },
-              { num: 2, label: "Type d'analyse" },
-              { num: 3, label: "Variables" },
-              { num: 4, label: "Résultats" }
-            ].map((s, i) => (
-              <div key={s.num} className="flex items-center flex-1">
-                <div className="flex flex-col items-center">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg transition-all ${
-                    step >= s.num 
-                      ? 'bg-primary text-primary-foreground' 
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
-                    {step > s.num ? <Check className="w-6 h-6" /> : s.num}
-                  </div>
-                  <p className="text-xs mt-2 font-medium text-center">{s.label}</p>
-                </div>
-                {i < 3 && (
-                  <div className={`h-1 flex-1 mx-2 rounded transition-all ${
-                    step > s.num ? 'bg-primary' : 'bg-muted'
-                  }`} />
-                )}
+        {/* Step indicator */}
+        <div className="mb-8 flex justify-center gap-4">
+          {[1, 2, 3, 4].map(s => (
+            <div key={s} className="flex items-center">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
+                step >= s ? 'bg-primary text-primary-foreground' : 'bg-muted'
+              }`}>
+                {s}
               </div>
-            ))}
-          </div>
+              {s < 4 && <div className={`h-1 w-16 ${step > s ? 'bg-primary' : 'bg-muted'}`} />}
+            </div>
+          ))}
         </div>
 
-        <div className="max-w-5xl mx-auto">
-          {/* Step 1: Upload */}
-          {step === 1 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5" />
-                  Étape 1 : Importer vos données
-                </CardTitle>
-                <CardDescription>
-                  Formats supportés : CSV, Excel (.xlsx, .xls), SPSS (.sav)
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="file-upload">Choisir un fichier</Label>
-                  <Input
-                    id="file-upload"
-                    type="file"
-                    accept=".csv,.xlsx,.xls,.sav"
-                    onChange={handleFileChange}
-                  />
+        {/* Step 1: Upload */}
+        {step === 1 && (
+          <Card className="max-w-2xl mx-auto">
+            <CardHeader>
+              <CardTitle>Étape 1 : Télécharger les données</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input type="file" accept=".csv,.xlsx,.xls,.sav" onChange={handleFileChange} />
+              
+              {uploadedData && (
+                <div className="p-4 bg-muted rounded">
+                  <p className="font-semibold">{uploadedData.fileName}</p>
+                  <p className="text-sm">{uploadedData.rowCount} × {uploadedData.columnCount}</p>
                 </div>
+              )}
 
-                {uploadedData && (
-                  <div className="space-y-4">
-                    <div className="p-4 bg-muted rounded-lg">
-                      <div className="flex items-center gap-3 mb-4">
-                        <Database className="w-8 h-8 text-primary" />
-                        <div>
-                          <p className="font-medium">{selectedFile?.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {uploadedData.rowCount} lignes × {uploadedData.columnCount} colonnes
-                          </p>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium">Colonnes détectées :</p>
-                        <div className="flex flex-wrap gap-2">
-                          {uploadedData.columns.map((col: string) => (
-                            <span key={col} className="px-2 py-1 bg-background rounded text-xs">
-                              {col}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <Button onClick={() => setStep(2)} className="w-full">
-                      Continuer vers le choix du type d'analyse
+              <div className="flex gap-3">
+                <Button onClick={() => setStep(2)} disabled={!uploadedData} className="flex-1">
+                  Continuer
+                </Button>
+                <Dialog open={showLoadDialog} onOpenChange={setShowLoadDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <FolderOpen className="w-4 h-4 mr-2" />
+                      Charger
                     </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Analyses sauvegardées</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                      {savedAnalyses.map(a => (
+                        <Button key={a.id} variant="outline" className="w-full" onClick={() => handleLoadAnalysis(a)}>
+                          {a.analysis_name}
+                        </Button>
+                      ))}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 2: Analysis Type */}
+        {step === 2 && (
+          <Card className="max-w-4xl mx-auto">
+            <CardHeader>
+              <CardTitle>Étape 2 : Type d'analyse</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid md:grid-cols-3 gap-4">
+                <Card className={`cursor-pointer ${analysisType === 'frequency' ? 'ring-2 ring-primary' : ''}`} onClick={() => setAnalysisType('frequency')}>
+                  <CardHeader>
+                    <FileSpreadsheet className="w-12 h-12 mb-2" />
+                    <CardTitle>Fréquence</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card className={`cursor-pointer ${analysisType === 'association' ? 'ring-2 ring-primary' : ''}`} onClick={() => setAnalysisType('association')}>
+                  <CardHeader>
+                    <Link2 className="w-12 h-12 mb-2" />
+                    <CardTitle>Associations</CardTitle>
+                  </CardHeader>
+                </Card>
+                <Card className={`cursor-pointer ${analysisType === 'advanced' ? 'ring-2 ring-primary' : ''}`} onClick={() => setAnalysisType('advanced')}>
+                  <CardHeader>
+                    <TrendingUp className="w-12 h-12 mb-2" />
+                    <CardTitle>Avancées</CardTitle>
+                  </CardHeader>
+                </Card>
+              </div>
+
+              {analysisType === 'association' && (
+                <Select value={analysisSubType || ''} onValueChange={(v) => setAnalysisSubType(v as AnalysisSubType)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="chi2">Test χ²</SelectItem>
+                    <SelectItem value="correlation">Corrélation</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+
+              {analysisType === 'advanced' && (
+                <Select value={analysisSubType || ''} onValueChange={(v) => setAnalysisSubType(v as AnalysisSubType)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ttest">Test t</SelectItem>
+                    <SelectItem value="anova">ANOVA</SelectItem>
+                    <SelectItem value="regression">Régression</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setStep(1)}>Retour</Button>
+                <Button onClick={() => setStep(3)} disabled={!analysisType} className="flex-1">Continuer</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 3: Variables */}
+        {step === 3 && uploadedData && (
+          <Card className="max-w-4xl mx-auto">
+            <CardHeader>
+              <CardTitle>Étape 3 : Sélection des variables</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid md:grid-cols-3 gap-3">
+                {uploadedData.columns.map((col: string) => (
+                  <div key={col} className="flex items-center gap-2">
+                    <Checkbox checked={selectedVariables.includes(col)} onCheckedChange={() => handleVariableToggle(col)} />
+                    <label className="text-sm">{col}</label>
                   </div>
-                )}
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setStep(2)}>Retour</Button>
+                <Button onClick={handleRunAnalysis} disabled={selectedVariables.length === 0} className="flex-1">
+                  Analyser
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-                {!uploadedData && (
-                  <div className="border-2 border-dashed border-muted rounded-lg p-8 text-center">
-                    <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                    <p className="text-lg font-medium mb-2">Glissez-déposez votre fichier ici</p>
-                    <p className="text-sm text-muted-foreground">
-                      ou utilisez le bouton ci-dessus pour sélectionner un fichier
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+        {/* Step 4: Results */}
+        {step === 4 && analysisResult && (
+          <div className="space-y-6">
+            <div className="flex justify-between">
+              <h2 className="text-2xl font-bold">Résultats</h2>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowRawData(!showRawData)}>
+                  <Eye className="w-4 h-4 mr-2" />
+                  Données brutes
+                </Button>
+                <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <Save className="w-4 h-4 mr-2" />
+                      Sauvegarder
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Sauvegarder l'analyse</DialogTitle>
+                    </DialogHeader>
+                    <Input value={analysisName} onChange={(e) => setAnalysisName(e.target.value)} placeholder="Nom" />
+                    <DialogFooter>
+                      <Button onClick={handleSaveAnalysis}>Sauvegarder</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <Button onClick={resetAnalysis}>Nouvelle</Button>
+              </div>
+            </div>
 
-          {/* Step 2: Analysis Type */}
-          {step === 2 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Étape 2 : Type d'analyse</CardTitle>
-                <CardDescription>Choisissez le type d'analyse à effectuer</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <button
-                    onClick={() => setAnalysisType('frequency')}
-                    className={`p-6 border-2 rounded-lg transition-all text-left hover:border-primary ${
-                      analysisType === 'frequency' ? 'border-primary bg-primary/5' : 'border-border'
-                    }`}
-                  >
-                    <BarChart3 className="w-8 h-8 mb-3 text-primary" />
-                    <h3 className="font-semibold mb-2">Fréquence</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Tableaux de fréquence, distributions, statistiques descriptives
-                    </p>
-                  </button>
-
-                  <button
-                    onClick={() => setAnalysisType('association')}
-                    className={`p-6 border-2 rounded-lg transition-all text-left hover:border-primary ${
-                      analysisType === 'association' ? 'border-primary bg-primary/5' : 'border-border'
-                    }`}
-                  >
-                    <Link2 className="w-8 h-8 mb-3 text-primary" />
-                    <h3 className="font-semibold mb-2">Associations</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Test du Chi², corrélations, tests d'association
-                    </p>
-                  </button>
-
-                  <button
-                    onClick={() => setAnalysisType('advanced')}
-                    className={`p-6 border-2 rounded-lg transition-all text-left hover:border-primary ${
-                      analysisType === 'advanced' ? 'border-primary bg-primary/5' : 'border-border'
-                    }`}
-                  >
-                    <TrendingUp className="w-8 h-8 mb-3 text-primary" />
-                    <h3 className="font-semibold mb-2">Analyses avancées</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Régressions, tests t, ANOVA, analyses multivariées
-                    </p>
-                  </button>
-                </div>
-
-                <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => setStep(1)}>
-                    Retour
-                  </Button>
-                  <Button 
-                    onClick={() => setStep(3)} 
-                    disabled={!analysisType}
-                    className="flex-1"
-                  >
-                    Continuer vers la sélection des variables
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Step 3: Variable Selection */}
-          {step === 3 && uploadedData && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Étape 3 : Sélection des variables</CardTitle>
-                <CardDescription>
-                  Choisissez les variables à inclure dans l'analyse {
-                    analysisType === 'frequency' ? 'de fréquence' : 
-                    analysisType === 'association' ? 'd\'association' : 
-                    'avancée'
-                  }
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-3">
-                  {uploadedData.statistics.map((stat: ColumnStats) => (
-                    <div 
-                      key={stat.name}
-                      className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                    >
-                      <Checkbox
-                        id={stat.name}
-                        checked={selectedVariables.includes(stat.name)}
-                        onCheckedChange={() => handleVariableToggle(stat.name)}
-                      />
-                      <label
-                        htmlFor={stat.name}
-                        className="flex-1 flex items-center justify-between cursor-pointer"
-                      >
-                        <div>
-                          <p className="font-medium">{stat.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {stat.type === 'numeric' ? 'Quantitative' : 
-                             stat.type === 'age_groups' ? 'Tranches d\'âge' : 
-                             'Qualitative'} • {stat.count} valeurs
-                          </p>
-                        </div>
-                        <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded">
-                          {stat.type === 'numeric' ? 'Num.' : 'Cat.'}
-                        </span>
-                      </label>
-                    </div>
-                  ))}
-                </div>
-
-                {selectedVariables.length > 0 && (
-                  <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
-                    <p className="text-sm font-medium mb-1">
-                      {selectedVariables.length} variable{selectedVariables.length > 1 ? 's' : ''} sélectionnée{selectedVariables.length > 1 ? 's' : ''}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {selectedVariables.join(', ')}
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => setStep(2)}>
-                    Retour
-                  </Button>
-                  <Button 
-                    onClick={handleRunAnalysis}
-                    disabled={selectedVariables.length === 0 || isAnalyzing}
-                    className="flex-1"
-                  >
-                    {isAnalyzing ? "Analyse en cours..." : "Lancer l'analyse"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Step 4: Results */}
-          {step === 4 && analysisResult && (
-            <>
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5" />
-                        Résultats de l'analyse
-                      </CardTitle>
-                      <CardDescription>
-                        {analysisType === 'frequency' && 'Analyse de fréquence'}
-                        {analysisType === 'association' && 'Analyse d\'association'}
-                        {analysisType === 'advanced' && 'Analyse avancée'}
-                        {' • '}{selectedVariables.length} variable{selectedVariables.length > 1 ? 's' : ''}
-                      </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={resetAnalysis}>
-                        Nouvelle analyse
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDownload('excel')}>
-                        <FileSpreadsheet className="w-4 h-4 mr-2" />
-                        Excel
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleDownload('pdf')}>
-                        <FileText className="w-4 h-4 mr-2" />
-                        PDF
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="p-4 bg-muted rounded-lg">
-                      <p className="text-sm text-muted-foreground">Variables analysées</p>
-                      <p className="text-2xl font-bold">{selectedVariables.length}</p>
-                    </div>
-                    <div className="p-4 bg-muted rounded-lg">
-                      <p className="text-sm text-muted-foreground">Observations</p>
-                      <p className="text-2xl font-bold">{analysisResult.rowCount}</p>
-                    </div>
-                    <div className="p-4 bg-muted rounded-lg">
-                      <p className="text-sm text-muted-foreground">Type</p>
-                      <p className="text-lg font-bold">
-                        {analysisType === 'frequency' ? 'Fréquence' : analysisType === 'association' ? 'Association' : 'Avancée'}
-                      </p>
-                    </div>
-                    <div className="p-4 bg-muted rounded-lg">
-                      <p className="text-sm text-muted-foreground">Fichier</p>
-                      <p className="text-sm font-medium truncate">{analysisResult.fileName}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Statistiques descriptives</CardTitle>
-                  <CardDescription>Analyse détaillée par variable</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-8">
-                    {analysisResult.statistics.map((stat, index) => (
-                      <div key={index} className="border rounded-lg p-6 space-y-4">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-semibold text-lg">{stat.name}</h3>
-                          <span className="text-xs px-3 py-1 bg-primary/10 text-primary rounded-full font-medium">
-                            {stat.type === 'numeric' ? 'Quantitative' : stat.type === 'age_groups' ? 'Tranches d\'âge' : 'Qualitative'}
-                          </span>
-                        </div>
-                        
-                        {stat.type === 'numeric' ? (
-                          <div className="space-y-4">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Statistique</TableHead>
-                                  <TableHead>Valeur</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                <TableRow>
-                                  <TableCell>Effectif</TableCell>
-                                  <TableCell>{stat.count}</TableCell>
-                                </TableRow>
-                                <TableRow>
-                                  <TableCell>Moyenne</TableCell>
-                                  <TableCell>{stat.mean?.toFixed(2)}</TableCell>
-                                </TableRow>
-                                <TableRow>
-                                  <TableCell>Médiane</TableCell>
-                                  <TableCell>{stat.median?.toFixed(2)}</TableCell>
-                                </TableRow>
-                                <TableRow>
-                                  <TableCell>Écart-type</TableCell>
-                                  <TableCell>{stat.std?.toFixed(2)}</TableCell>
-                                </TableRow>
-                                <TableRow>
-                                  <TableCell>Minimum</TableCell>
-                                  <TableCell>{stat.min?.toFixed(2)}</TableCell>
-                                </TableRow>
-                                <TableRow>
-                                  <TableCell>Maximum</TableCell>
-                                  <TableCell>{stat.max?.toFixed(2)}</TableCell>
-                                </TableRow>
-                                <TableRow>
-                                  <TableCell>Valeurs manquantes</TableCell>
-                                  <TableCell>{stat.missing}</TableCell>
-                                </TableRow>
-                              </TableBody>
-                            </Table>
-                            
-                            <div data-chart-id={`bar-${stat.name}`}>
-                              <h4 className="text-sm font-semibold mb-3 text-center">Statistiques résumées</h4>
-                              <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={[
-                                  { name: 'Min', value: stat.min || 0 },
-                                  { name: 'Moyenne', value: stat.mean || 0 },
-                                  { name: 'Médiane', value: stat.median || 0 },
-                                  { name: 'Max', value: stat.max || 0 }
-                                ]}>
-                                  <CartesianGrid strokeDasharray="3 3" />
-                                  <XAxis dataKey="name" />
-                                  <YAxis />
-                                  <Tooltip />
-                                  <Bar dataKey="value" fill="hsl(var(--primary))" />
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Modalité</TableHead>
-                                  <TableHead>Effectif</TableHead>
-                                  <TableHead>Pourcentage</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {stat.frequencies?.map((freq, i) => (
-                                  <TableRow key={i}>
-                                    <TableCell className="font-medium">{freq.value}</TableCell>
-                                    <TableCell>{freq.count}</TableCell>
-                                    <TableCell>{freq.percentage}%</TableCell>
-                                  </TableRow>
-                                ))}
-                                {stat.missing > 0 && (
-                                  <TableRow>
-                                    <TableCell className="font-medium text-muted-foreground">Manquantes</TableCell>
-                                    <TableCell className="text-muted-foreground">{stat.missing}</TableCell>
-                                    <TableCell></TableCell>
-                                  </TableRow>
-                                )}
-                              </TableBody>
-                            </Table>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div data-chart-id={`bar-${stat.name}`}>
-                                <h4 className="text-sm font-semibold mb-3 text-center">Diagramme en barres</h4>
-                                <ResponsiveContainer width="100%" height={300}>
-                                  <BarChart data={stat.frequencies}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="value" />
-                                    <YAxis />
-                                    <Tooltip />
-                                    <Bar dataKey="count" fill="hsl(var(--primary))" />
-                                  </BarChart>
-                                </ResponsiveContainer>
-                              </div>
-                              
-                              <div data-chart-id={`pie-${stat.name}`}>
-                                <h4 className="text-sm font-semibold mb-3 text-center">Diagramme circulaire</h4>
-                                <ResponsiveContainer width="100%" height={300}>
-                                  <PieChart>
-                                    <Pie
-                                      data={stat.frequencies}
-                                      cx="50%"
-                                      cy="50%"
-                                      labelLine={false}
-                                      label={({ value, percentage }) => `${percentage}%`}
-                                      outerRadius={80}
-                                      fill="#8884d8"
-                                      dataKey="count"
-                                    >
-                                      {stat.frequencies?.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                      ))}
-                                    </Pie>
-                                    <Tooltip />
-                                    <Legend />
-                                  </PieChart>
-                                </ResponsiveContainer>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          )}
-        </div>
+            {showRawData && renderRawDataTable()}
+            {renderFrequencyResults()}
+            {renderAssociationResults()}
+            {renderAdvancedResults()}
+          </div>
+        )}
       </main>
     </div>
   );
