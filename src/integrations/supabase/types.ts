@@ -38,6 +38,42 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_analyses: {
+        Row: {
+          analysis_name: string
+          analysis_type: string
+          created_at: string | null
+          file_name: string
+          id: string
+          results: Json
+          selected_variables: string[]
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          analysis_name: string
+          analysis_type: string
+          created_at?: string | null
+          file_name: string
+          id?: string
+          results: Json
+          selected_variables: string[]
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          analysis_name?: string
+          analysis_type?: string
+          created_at?: string | null
+          file_name?: string
+          id?: string
+          results?: Json
+          selected_variables?: string[]
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
