@@ -344,19 +344,97 @@ const DataAnalysis = () => {
     return analysisResult.statistics.map((stat: ColumnStats) => (
       <Card key={stat.name} className="mb-6">
         <CardHeader>
-          <CardTitle>{stat.name}</CardTitle>
+          <CardTitle>Tableau de fréquence: {stat.name}</CardTitle>
+          <CardDescription>
+            Type: {stat.type === 'numeric' ? 'Numérique' : 'Catégorielle'} | 
+            Total: {stat.count} | Valeurs manquantes: {stat.missing}
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          {/* Tableau de fréquence */}
           {stat.frequencies && (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={stat.frequencies}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="value" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="count" fill="hsl(var(--primary))" />
-              </BarChart>
-            </ResponsiveContainer>
+            <div>
+              <h4 className="font-semibold mb-3">Distribution des fréquences</h4>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Valeur</TableHead>
+                      <TableHead className="text-right">Effectif</TableHead>
+                      <TableHead className="text-right">Pourcentage</TableHead>
+                      <TableHead>Visualisation</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {stat.frequencies.map((freq: FrequencyItem, idx: number) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium">{freq.value}</TableCell>
+                        <TableCell className="text-right">{freq.count}</TableCell>
+                        <TableCell className="text-right">{freq.percentage.toFixed(2)}%</TableCell>
+                        <TableCell>
+                          <div className="w-full bg-muted rounded-full h-4">
+                            <div 
+                              className="bg-primary h-4 rounded-full" 
+                              style={{ width: `${freq.percentage}%` }}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+
+          {/* Statistiques descriptives pour variables numériques */}
+          {stat.type === 'numeric' && (
+            <div>
+              <h4 className="font-semibold mb-3">Statistiques descriptives</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {stat.mean !== undefined && (
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Moyenne</p>
+                    <p className="text-lg font-bold">{stat.mean.toFixed(2)}</p>
+                  </div>
+                )}
+                {stat.median !== undefined && (
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Médiane</p>
+                    <p className="text-lg font-bold">{stat.median.toFixed(2)}</p>
+                  </div>
+                )}
+                {stat.std !== undefined && (
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Écart-type</p>
+                    <p className="text-lg font-bold">{stat.std.toFixed(2)}</p>
+                  </div>
+                )}
+                {stat.min !== undefined && stat.max !== undefined && (
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Min - Max</p>
+                    <p className="text-lg font-bold">{stat.min.toFixed(2)} - {stat.max.toFixed(2)}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Graphique */}
+          {stat.frequencies && (
+            <div>
+              <h4 className="font-semibold mb-3">Graphique</h4>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={stat.frequencies}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="value" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" name="Effectif" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -371,24 +449,90 @@ const DataAnalysis = () => {
       return analysisResult.chi2Tests.map((test: any, idx: number) => (
         <Card key={idx} className="mb-6">
           <CardHeader>
-            <CardTitle>Chi² Test: {test.variable1} × {test.variable2}</CardTitle>
+            <CardTitle>Test du Chi² : {test.variable1} × {test.variable2}</CardTitle>
+            <CardDescription>
+              Test d'indépendance entre deux variables catégorielles
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4">
+          <CardContent className="space-y-6">
+            {/* Tableau de contingence */}
+            {test.contingencyTable && (
               <div>
-                <p className="text-sm text-muted-foreground">χ²</p>
-                <p className="text-xl font-bold">{test.chi2}</p>
+                <h4 className="font-semibold mb-3">Tableau de contingence (effectifs observés)</h4>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{test.variable1} / {test.variable2}</TableHead>
+                        {Object.keys(test.contingencyTable[Object.keys(test.contingencyTable)[0]]).map((col: string) => (
+                          <TableHead key={col} className="text-right">{col}</TableHead>
+                        ))}
+                        <TableHead className="text-right font-bold">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                    {Object.entries(test.contingencyTable).map(([row, values]: [string, any]) => {
+                        const rowTotal = Object.values(values).reduce((sum: number, val: any) => sum + val, 0) as number;
+                        return (
+                          <TableRow key={row}>
+                            <TableCell className="font-medium">{row}</TableCell>
+                            {Object.values(values).map((val: any, idx: number) => (
+                              <TableCell key={idx} className="text-right">{val}</TableCell>
+                            ))}
+                            <TableCell className="text-right font-bold">{rowTotal}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      <TableRow className="font-bold bg-muted/50">
+                        <TableCell>Total</TableCell>
+                        {Object.keys(test.contingencyTable[Object.keys(test.contingencyTable)[0]]).map((col: string, idx: number) => {
+                          const colTotal = Object.values(test.contingencyTable).reduce(
+                            (sum: number, row: any) => sum + (row[col] || 0), 0
+                          ) as number;
+                          return <TableCell key={idx} className="text-right">{colTotal}</TableCell>;
+                        })}
+                        <TableCell className="text-right">{test.n}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">p-value</p>
-                <p className="text-xl font-bold">{test.pValue}</p>
+            )}
+
+            {/* Résultats du test */}
+            <div>
+              <h4 className="font-semibold mb-3">Résultats du test</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">χ² calculé</p>
+                  <p className="text-xl font-bold">{test.chi2}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Degrés de liberté</p>
+                  <p className="text-xl font-bold">{test.df}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">p-value</p>
+                  <p className="text-xl font-bold">{test.pValue}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Significatif (α=0.05)</p>
+                  <p className={`text-xl font-bold ${test.pValue < 0.05 ? 'text-green-600' : 'text-red-600'}`}>
+                    {test.pValue < 0.05 ? 'Oui' : 'Non'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Significatif</p>
-                <p className={`text-xl font-bold ${test.significant ? 'text-green-600' : 'text-red-600'}`}>
-                  {test.significant ? 'Oui' : 'Non'}
-                </p>
-              </div>
+            </div>
+
+            {/* Interprétation */}
+            <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2">Interprétation</h4>
+              <p className="text-sm">
+                {test.pValue < 0.05 
+                  ? `Il existe une association statistiquement significative entre ${test.variable1} et ${test.variable2} (p = ${test.pValue} < 0.05). Les deux variables ne sont pas indépendantes.`
+                  : `Il n'y a pas d'association statistiquement significative entre ${test.variable1} et ${test.variable2} (p = ${test.pValue} ≥ 0.05). Les deux variables peuvent être considérées comme indépendantes.`
+                }
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -399,24 +543,45 @@ const DataAnalysis = () => {
       return analysisResult.correlations.map((corr: any, idx: number) => (
         <Card key={idx} className="mb-6">
           <CardHeader>
-            <CardTitle>Corrélation: {corr.variable1} × {corr.variable2}</CardTitle>
+            <CardTitle>Corrélation de Pearson : {corr.variable1} × {corr.variable2}</CardTitle>
+            <CardDescription>
+              Test de corrélation entre deux variables numériques
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">r</p>
-                <p className="text-xl font-bold">{corr.correlation}</p>
+          <CardContent className="space-y-6">
+            {/* Résultats */}
+            <div>
+              <h4 className="font-semibold mb-3">Résultats du test</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Coefficient r</p>
+                  <p className="text-xl font-bold">{corr.correlation}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">p-value</p>
+                  <p className="text-xl font-bold">{corr.pValue}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Significatif (α=0.05)</p>
+                  <p className={`text-xl font-bold ${corr.pValue < 0.05 ? 'text-green-600' : 'text-red-600'}`}>
+                    {corr.pValue < 0.05 ? 'Oui' : 'Non'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">p-value</p>
-                <p className="text-xl font-bold">{corr.pValue}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Significatif</p>
-                <p className={`text-xl font-bold ${corr.significant ? 'text-green-600' : 'text-red-600'}`}>
-                  {corr.significant ? 'Oui' : 'Non'}
-                </p>
-              </div>
+            </div>
+
+            {/* Interprétation */}
+            <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2">Interprétation</h4>
+              <p className="text-sm">
+                {corr.pValue < 0.05 
+                  ? `Il existe une corrélation ${Math.abs(parseFloat(corr.correlation)) > 0.7 ? 'forte' : Math.abs(parseFloat(corr.correlation)) > 0.4 ? 'modérée' : 'faible'} 
+                     ${parseFloat(corr.correlation) > 0 ? 'positive' : 'négative'} statistiquement significative entre ${corr.variable1} et ${corr.variable2} 
+                     (r = ${corr.correlation}, p = ${corr.pValue} < 0.05).`
+                  : `Il n'y a pas de corrélation statistiquement significative entre ${corr.variable1} et ${corr.variable2} 
+                     (r = ${corr.correlation}, p = ${corr.pValue} ≥ 0.05).`
+                }
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -432,26 +597,73 @@ const DataAnalysis = () => {
       return analysisResult.tTests.map((test: any, idx: number) => (
         <Card key={idx} className="mb-6">
           <CardHeader>
-            <CardTitle>Test t: {test.group1} vs {test.group2}</CardTitle>
+            <CardTitle>Test t de Student : {test.numericVariable}</CardTitle>
+            <CardDescription>
+              Comparaison entre {test.group1} et {test.group2}
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm">Moyenne 1</p>
-                <p className="font-bold">{test.mean1}</p>
+          <CardContent className="space-y-6">
+            {/* Statistiques descriptives */}
+            <div>
+              <h4 className="font-semibold mb-3">Statistiques descriptives</h4>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Groupe</TableHead>
+                    <TableHead className="text-right">N</TableHead>
+                    <TableHead className="text-right">Moyenne</TableHead>
+                    <TableHead className="text-right">Écart-type</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell className="font-medium">{test.group1}</TableCell>
+                    <TableCell className="text-right">{test.n1}</TableCell>
+                    <TableCell className="text-right">{test.mean1}</TableCell>
+                    <TableCell className="text-right">{test.std1}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">{test.group2}</TableCell>
+                    <TableCell className="text-right">{test.n2}</TableCell>
+                    <TableCell className="text-right">{test.mean2}</TableCell>
+                    <TableCell className="text-right">{test.std2}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Résultats du test */}
+            <div>
+              <h4 className="font-semibold mb-3">Résultats du test</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Statistique t</p>
+                  <p className="text-xl font-bold">{test.t}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">p-value</p>
+                  <p className="text-xl font-bold">{test.pValue}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Significatif (α=0.05)</p>
+                  <p className={`text-xl font-bold ${test.pValue < 0.05 ? 'text-green-600' : 'text-red-600'}`}>
+                    {test.pValue < 0.05 ? 'Oui' : 'Non'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm">Moyenne 2</p>
-                <p className="font-bold">{test.mean2}</p>
-              </div>
-              <div>
-                <p className="text-sm">t</p>
-                <p className="font-bold">{test.tStatistic}</p>
-              </div>
-              <div>
-                <p className="text-sm">p-value</p>
-                <p className="font-bold">{test.pValue}</p>
-              </div>
+            </div>
+
+            {/* Interprétation */}
+            <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2">Interprétation</h4>
+              <p className="text-sm">
+                {test.pValue < 0.05 
+                  ? `Il existe une différence statistiquement significative entre les groupes ${test.group1} et ${test.group2} 
+                     (t = ${test.t}, p = ${test.pValue} < 0.05). Les moyennes sont significativement différentes.`
+                  : `Il n'y a pas de différence statistiquement significative entre les groupes ${test.group1} et ${test.group2} 
+                     (t = ${test.t}, p = ${test.pValue} ≥ 0.05). Les moyennes ne sont pas significativement différentes.`
+                }
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -462,24 +674,48 @@ const DataAnalysis = () => {
       return analysisResult.anovaTests.map((test: any, idx: number) => (
         <Card key={idx} className="mb-6">
           <CardHeader>
-            <CardTitle>ANOVA: {test.dependentVariable} par {test.independentVariable}</CardTitle>
+            <CardTitle>ANOVA : {test.dependentVariable} par {test.independentVariable}</CardTitle>
+            <CardDescription>
+              Analyse de variance pour comparer plusieurs groupes
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              <div>
-                <p className="text-sm">F</p>
-                <p className="font-bold">{test.fStatistic}</p>
+          <CardContent className="space-y-6">
+            {/* Résultats du test */}
+            <div>
+              <h4 className="font-semibold mb-3">Résultats du test</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Statistique F</p>
+                  <p className="text-xl font-bold">{test.fStatistic}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">ddl entre</p>
+                  <p className="text-xl font-bold">{test.dfBetween}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">p-value</p>
+                  <p className="text-xl font-bold">{test.pValue}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">Significatif (α=0.05)</p>
+                  <p className={`text-xl font-bold ${test.pValue < 0.05 ? 'text-green-600' : 'text-red-600'}`}>
+                    {test.pValue < 0.05 ? 'Oui' : 'Non'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm">p-value</p>
-                <p className="font-bold">{test.pValue}</p>
-              </div>
-              <div>
-                <p className="text-sm">Significatif</p>
-                <p className={test.significant ? 'font-bold text-green-600' : 'font-bold text-red-600'}>
-                  {test.significant ? 'Oui' : 'Non'}
-                </p>
-              </div>
+            </div>
+
+            {/* Interprétation */}
+            <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2">Interprétation</h4>
+              <p className="text-sm">
+                {test.pValue < 0.05 
+                  ? `Il existe des différences statistiquement significatives entre les groupes de ${test.independentVariable} 
+                     pour la variable ${test.dependentVariable} (F = ${test.fStatistic}, p = ${test.pValue} < 0.05).`
+                  : `Il n'y a pas de différence statistiquement significative entre les groupes de ${test.independentVariable} 
+                     pour la variable ${test.dependentVariable} (F = ${test.fStatistic}, p = ${test.pValue} ≥ 0.05).`
+                }
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -490,18 +726,69 @@ const DataAnalysis = () => {
       return analysisResult.regressions.map((reg: any, idx: number) => (
         <Card key={idx} className="mb-6">
           <CardHeader>
-            <CardTitle>Régression: {reg.dependentVariable}</CardTitle>
+            <CardTitle>Régression linéaire : {reg.dependentVariable}</CardTitle>
+            <CardDescription>
+              Variables indépendantes : {reg.independentVariables?.join(', ')}
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm">R²</p>
-                <p className="font-bold">{reg.rSquared}</p>
+          <CardContent className="space-y-6">
+            {/* Résultats du modèle */}
+            <div>
+              <h4 className="font-semibold mb-3">Qualité du modèle</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">R²</p>
+                  <p className="text-xl font-bold">{reg.rSquared}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">R² ajusté</p>
+                  <p className="text-xl font-bold">{reg.adjustedRSquared}</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <p className="text-sm text-muted-foreground">p-value</p>
+                  <p className="text-xl font-bold">{reg.pValue}</p>
+                </div>
               </div>
+            </div>
+
+            {/* Coefficients */}
+            {reg.coefficients && (
               <div>
-                <p className="text-sm">p-value</p>
-                <p className="font-bold">{reg.pValue}</p>
+                <h4 className="font-semibold mb-3">Coefficients</h4>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Variable</TableHead>
+                      <TableHead className="text-right">Coefficient</TableHead>
+                      <TableHead className="text-right">Erreur std</TableHead>
+                      <TableHead className="text-right">p-value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reg.coefficients.map((coef: any, idx: number) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium">{coef.variable}</TableCell>
+                        <TableCell className="text-right">{coef.value}</TableCell>
+                        <TableCell className="text-right">{coef.stdError}</TableCell>
+                        <TableCell className="text-right">{coef.pValue}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
+            )}
+
+            {/* Interprétation */}
+            <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2">Interprétation</h4>
+              <p className="text-sm">
+                {reg.pValue < 0.05 
+                  ? `Le modèle de régression est statistiquement significatif (p = ${reg.pValue} < 0.05). 
+                     Le R² de ${reg.rSquared} indique que ${(parseFloat(reg.rSquared) * 100).toFixed(1)}% de la variance 
+                     de ${reg.dependentVariable} est expliquée par le modèle.`
+                  : `Le modèle de régression n'est pas statistiquement significatif (p = ${reg.pValue} ≥ 0.05).`
+                }
+              </p>
             </div>
           </CardContent>
         </Card>
