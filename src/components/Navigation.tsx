@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { BarChart3 } from "lucide-react";
+import saidistatLogo from "@/assets/saidistat-logo.jpg";
 
 const Navigation = () => {
   return (
@@ -8,11 +8,11 @@ const Navigation = () => {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
-              <BarChart3 className="w-6 h-6 text-primary-foreground" />
+            <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg group-hover:shadow-xl transition-shadow">
+              <img src={saidistatLogo} alt="SaidiStat Logo" className="w-full h-full object-cover" />
             </div>
             <span className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              BioStasmarT
+              SaidiStat
             </span>
           </Link>
 

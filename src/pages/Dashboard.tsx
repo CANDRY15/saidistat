@@ -6,6 +6,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import saidistatLogo from "@/assets/saidistat-logo.jpg";
 
 const Dashboard = () => {
   const { user, loading } = useAuth();
@@ -53,11 +54,11 @@ const Dashboard = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-                <BarChart3 className="w-6 h-6 text-primary-foreground" />
+              <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg">
+                <img src={saidistatLogo} alt="SaidiStat Logo" className="w-full h-full object-cover" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                BioStasmarT
+                SaidiStat
               </span>
             </Link>
             <div className="flex items-center gap-3">
