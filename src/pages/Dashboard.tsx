@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, FileText, GraduationCap, Upload, TrendingUp, Calculator, Activity } from "lucide-react";
+import { BarChart3, FileText, GraduationCap, Upload, TrendingUp, Calculator, Activity, BookOpen } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -120,6 +120,23 @@ const Dashboard = () => {
                 <CardTitle>Rédaction</CardTitle>
                 <CardDescription>
                   Générez automatiquement vos sections de rapport scientifique
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link to="/thesis-writing">
+            <Card className="group hover:shadow-xl transition-all duration-300 border-border hover:border-primary/50 cursor-pointer h-full relative overflow-hidden">
+              <div className="absolute top-2 right-2">
+                <span className="px-2 py-1 text-xs font-bold bg-primary text-primary-foreground rounded-full">Nouveau</span>
+              </div>
+              <CardHeader>
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <BookOpen className="w-6 h-6 text-primary-foreground" />
+                </div>
+                <CardTitle>Thèse / Mémoire</CardTitle>
+                <CardDescription>
+                  Assistant IA pour rédiger votre thèse ou mémoire médical avec structure académique complète
                 </CardDescription>
               </CardHeader>
             </Card>
