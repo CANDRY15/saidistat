@@ -1,1 +1,4 @@
 project_id = "vwxlmrrdiikkdaimgrwi"
+
+[functions.thesis-writing-ai]
+verify_jwt = false

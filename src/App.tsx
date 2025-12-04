@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import DataAnalysis from "./pages/DataAnalysis";
 import StatisticalTests from "./pages/StatisticalTests";
 import Writing from "./pages/Writing";
+import ThesisWriting from "./pages/ThesisWriting";
 import Training from "./pages/Training";
 import TrainingModule from "./pages/TrainingModule";
 import Exercises from "./pages/Exercises";
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="/tests/ttest" element={<TTest />} />
             <Route path="/tests/assistant" element={<TestAssistant />} />
             <Route path="/writing" element={<Writing />} />
+            <Route path="/thesis-writing" element={<ThesisWriting />} />
             <Route path="/training" element={<Training />} />
             <Route path="/training/:moduleId" element={<TrainingModule />} />
             <Route path="/exercises" element={<Exercises />} />
