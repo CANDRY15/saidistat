@@ -74,6 +74,54 @@ export type Database = {
         }
         Relationships: []
       }
+      thesis_projects: {
+        Row: {
+          created_at: string
+          current_step: number | null
+          domain: string | null
+          generated_sections: Json | null
+          id: string
+          location: string | null
+          period: string | null
+          population: string | null
+          study_type: Json | null
+          study_type_approved: boolean | null
+          topic: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_step?: number | null
+          domain?: string | null
+          generated_sections?: Json | null
+          id?: string
+          location?: string | null
+          period?: string | null
+          population?: string | null
+          study_type?: Json | null
+          study_type_approved?: boolean | null
+          topic: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_step?: number | null
+          domain?: string | null
+          generated_sections?: Json | null
+          id?: string
+          location?: string | null
+          period?: string | null
+          population?: string | null
+          study_type?: Json | null
+          study_type_approved?: boolean | null
+          topic?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,14 +7,26 @@ import { Textarea } from "@/components/ui/textarea";
 import { 
   BarChart3, ArrowLeft, ArrowRight, BookOpen, FileText, 
   CheckCircle, Loader2, Copy, Download, Sparkles, GraduationCap,
-  Target, FileSearch, Lightbulb, List, BookText, FlaskConical
+  Target, FileSearch, Lightbulb, List, BookText, FlaskConical,
+  Edit3, Save, FolderOpen, Plus, Trash2, FileType
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAuth } from "@/contexts/AuthContext";
+import RichTextEditor from "@/components/RichTextEditor";
+import { exportToWord } from "@/lib/exportWord";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface StudyTypeResult {
   studyType: string;
@@ -33,7 +45,25 @@ interface GeneratedSection {
   references?: string[];
 }
 
+interface ThesisProject {
+  id: string;
+  topic: string;
+  domain: string;
+  population: string | null;
+  period: string | null;
+  location: string | null;
+  study_type: StudyTypeResult | null;
+  study_type_approved: boolean;
+  current_step: number;
+  generated_sections: GeneratedSection[];
+  created_at: string;
+  updated_at: string;
+}
+
 const ThesisWriting = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  
   const [step, setStep] = useState(1);
   const [topic, setTopic] = useState("");
   const [domain, setDomain] = useState("Médecine");
@@ -42,11 +72,16 @@ const ThesisWriting = () => {
   const [location, setLocation] = useState("");
   
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [studyType, setStudyType] = useState<StudyTypeResult | null>(null);
   const [studyTypeApproved, setStudyTypeApproved] = useState(false);
   
   const [generatedSections, setGeneratedSections] = useState<GeneratedSection[]>([]);
-  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  
+  const [currentProject, setCurrentProject] = useState<ThesisProject | null>(null);
+  const [savedProjects, setSavedProjects] = useState<ThesisProject[]>([]);
+  const [showProjectsDialog, setShowProjectsDialog] = useState(false);
 
   const introductionSections = [
     { id: 'context', title: 'Contexte et justification', icon: Lightbulb },
@@ -56,6 +91,145 @@ const ThesisWriting = () => {
     { id: 'objectives', title: 'Objectifs', icon: List },
     { id: 'subdivision', title: 'Subdivision du travail', icon: BookText },
   ];
+
+  // Check auth and load projects on mount
+  useEffect(() => {
+    if (!user) {
+      toast.error("Veuillez vous connecter pour accéder à cette fonctionnalité");
+      navigate('/auth');
+      return;
+    }
+    loadProjects();
+  }, [user, navigate]);
+
+  const loadProjects = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('thesis_projects')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      // Cast the data properly
+      const projects = (data || []).map(p => ({
+        ...p,
+        study_type: p.study_type as unknown as StudyTypeResult | null,
+        generated_sections: (p.generated_sections as unknown as GeneratedSection[]) || []
+      }));
+      
+      setSavedProjects(projects);
+    } catch (error: any) {
+      console.error('Error loading projects:', error);
+    }
+  };
+
+  const loadProject = (project: ThesisProject) => {
+    setCurrentProject(project);
+    setTopic(project.topic);
+    setDomain(project.domain);
+    setPopulation(project.population || '');
+    setPeriod(project.period || '');
+    setLocation(project.location || '');
+    setStudyType(project.study_type);
+    setStudyTypeApproved(project.study_type_approved);
+    setGeneratedSections(project.generated_sections || []);
+    setStep(project.current_step);
+    setShowProjectsDialog(false);
+    toast.success("Projet chargé");
+  };
+
+  const saveProject = async () => {
+    if (!user || !topic.trim()) return;
+    
+    setIsSaving(true);
+    try {
+      const projectData = {
+        user_id: user.id,
+        topic,
+        domain,
+        population: population || null,
+        period: period || null,
+        location: location || null,
+        study_type: studyType as any,
+        study_type_approved: studyTypeApproved,
+        current_step: step,
+        generated_sections: generatedSections as any,
+      };
+
+      if (currentProject) {
+        // Update existing
+        const { error } = await supabase
+          .from('thesis_projects')
+          .update(projectData)
+          .eq('id', currentProject.id);
+        
+        if (error) throw error;
+        toast.success("Projet sauvegardé");
+      } else {
+        // Create new
+        const { data, error } = await supabase
+          .from('thesis_projects')
+          .insert(projectData)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        setCurrentProject({
+          ...data,
+          study_type: data.study_type as unknown as StudyTypeResult | null,
+          generated_sections: (data.generated_sections as unknown as GeneratedSection[]) || []
+        });
+        toast.success("Nouveau projet créé");
+      }
+      
+      loadProjects();
+    } catch (error: any) {
+      console.error('Error saving project:', error);
+      toast.error("Erreur lors de la sauvegarde");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteProject = async (projectId: string) => {
+    try {
+      const { error } = await supabase
+        .from('thesis_projects')
+        .delete()
+        .eq('id', projectId);
+      
+      if (error) throw error;
+      
+      if (currentProject?.id === projectId) {
+        setCurrentProject(null);
+        resetForm();
+      }
+      
+      loadProjects();
+      toast.success("Projet supprimé");
+    } catch (error: any) {
+      console.error('Error deleting project:', error);
+      toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  const resetForm = () => {
+    setTopic('');
+    setDomain('Médecine');
+    setPopulation('');
+    setPeriod('');
+    setLocation('');
+    setStudyType(null);
+    setStudyTypeApproved(false);
+    setGeneratedSections([]);
+    setStep(1);
+    setCurrentProject(null);
+  };
 
   const identifyStudyType = async () => {
     if (!topic.trim()) {
@@ -79,6 +253,7 @@ const ThesisWriting = () => {
       setStudyType(data);
       setStep(2);
       toast.success("Type d'étude identifié");
+      await saveProject();
     } catch (error: any) {
       console.error('Error:', error);
       toast.error(error.message || "Erreur lors de l'identification du type d'étude");
@@ -113,7 +288,6 @@ const ThesisWriting = () => {
         return;
       }
 
-      // Format the content based on section type
       let content = '';
       let references: string[] = [];
 
@@ -144,6 +318,9 @@ const ThesisWriting = () => {
       });
 
       toast.success(`Section "${sectionTitle}" générée`);
+      
+      // Auto-save after generation
+      setTimeout(() => saveProject(), 500);
     } catch (error: any) {
       console.error('Error:', error);
       toast.error(error.message || "Erreur lors de la génération");
@@ -159,24 +336,25 @@ const ThesisWriting = () => {
     toast.success("Introduction complète générée!");
   };
 
+  const updateSectionContent = (sectionId: string, newContent: string) => {
+    setGeneratedSections(prev => 
+      prev.map(s => s.id === sectionId ? { ...s, content: newContent } : s)
+    );
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("Copié dans le presse-papiers");
   };
 
-  const exportDocument = () => {
-    const content = generatedSections.map(s => 
-      `## ${s.title}\n\n${s.content}\n\n${s.references?.length ? `**Références:**\n${s.references.join('\n')}` : ''}`
-    ).join('\n\n---\n\n');
-
-    const blob = new Blob([content], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${topic.substring(0, 30)}_introduction.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Document exporté");
+  const handleExportWord = async () => {
+    try {
+      await exportToWord(generatedSections, topic);
+      toast.success("Document Word exporté avec formatage académique");
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error("Erreur lors de l'export");
+    }
   };
 
   return (
@@ -193,12 +371,76 @@ const ThesisWriting = () => {
                 BioStasmarT
               </span>
             </Link>
-            <Link to="/dashboard">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Retour
+            <div className="flex items-center gap-2">
+              <Dialog open={showProjectsDialog} onOpenChange={setShowProjectsDialog}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <FolderOpen className="w-4 h-4 mr-2" />
+                    Mes projets ({savedProjects.length})
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Mes projets de thèse</DialogTitle>
+                    <DialogDescription>
+                      Continuez un projet existant ou créez-en un nouveau
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {savedProjects.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">
+                        Aucun projet sauvegardé
+                      </p>
+                    ) : (
+                      savedProjects.map(project => (
+                        <div 
+                          key={project.id} 
+                          className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                          onClick={() => loadProject(project)}
+                        >
+                          <div className="flex-1">
+                            <p className="font-medium line-clamp-1">{project.topic}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Étape {project.current_step}/5 • {new Date(project.updated_at).toLocaleDateString('fr-FR')}
+                            </p>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteProject(project.id);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <Button onClick={resetForm} className="w-full">
+                    <Plus className="w-4 h-4 mr-2" /> Nouveau projet
+                  </Button>
+                </DialogContent>
+              </Dialog>
+              
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={saveProject}
+                disabled={isSaving || !topic.trim()}
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                Sauvegarder
               </Button>
-            </Link>
+              
+              <Link to="/dashboard">
+                <Button variant="ghost" size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Retour
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -214,13 +456,13 @@ const ThesisWriting = () => {
             Rédaction de Thèse / Mémoire
           </h1>
           <p className="text-xl text-muted-foreground">
-            Générez automatiquement les sections de votre travail scientifique
+            {currentProject ? `Projet: ${topic.substring(0, 50)}...` : 'Générez automatiquement les sections de votre travail scientifique'}
           </p>
         </div>
 
         {/* Progress Steps */}
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center gap-4">
+        <div className="flex justify-center mb-8 overflow-x-auto pb-2">
+          <div className="flex items-center gap-2 md:gap-4">
             {[
               { num: 1, label: "Sujet" },
               { num: 2, label: "Type d'étude" },
@@ -229,15 +471,22 @@ const ThesisWriting = () => {
               { num: 5, label: "Partie théorique" },
             ].map((s, i) => (
               <div key={s.num} className="flex items-center">
-                <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold ${
-                  step >= s.num ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                }`}>
-                  {step > s.num ? <CheckCircle className="w-5 h-5" /> : s.num}
-                </div>
-                <span className={`ml-2 text-sm ${step >= s.num ? 'text-foreground' : 'text-muted-foreground'}`}>
+                <button
+                  onClick={() => {
+                    if (s.num <= step || (s.num === 2 && studyType)) {
+                      setStep(s.num);
+                    }
+                  }}
+                  className={`flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full font-bold transition-colors ${
+                    step >= s.num ? 'bg-primary text-primary-foreground cursor-pointer' : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {step > s.num ? <CheckCircle className="w-4 h-4 md:w-5 md:h-5" /> : s.num}
+                </button>
+                <span className={`ml-1 md:ml-2 text-xs md:text-sm hidden sm:inline ${step >= s.num ? 'text-foreground' : 'text-muted-foreground'}`}>
                   {s.label}
                 </span>
-                {i < 4 && <ArrowRight className="w-4 h-4 mx-4 text-muted-foreground" />}
+                {i < 4 && <ArrowRight className="w-3 h-3 md:w-4 md:h-4 mx-1 md:mx-4 text-muted-foreground" />}
               </div>
             ))}
           </div>
@@ -337,7 +586,7 @@ const ThesisWriting = () => {
                 <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
                   <ArrowLeft className="w-4 h-4 mr-2" /> Modifier le sujet
                 </Button>
-                <Button onClick={() => { setStudyTypeApproved(true); setStep(3); }} className="flex-1">
+                <Button onClick={() => { setStudyTypeApproved(true); setStep(3); saveProject(); }} className="flex-1">
                   Approuver et continuer <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
@@ -387,7 +636,7 @@ const ThesisWriting = () => {
                 <Button variant="outline" onClick={() => setStep(2)} className="flex-1">
                   <ArrowLeft className="w-4 h-4 mr-2" /> Retour
                 </Button>
-                <Button onClick={() => setStep(4)} className="flex-1">
+                <Button onClick={() => { setStep(4); saveProject(); }} className="flex-1">
                   Générer l'introduction <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
@@ -402,7 +651,7 @@ const ThesisWriting = () => {
             <Card className="lg:col-span-1">
               <CardHeader>
                 <CardTitle className="text-lg">Sections de l'Introduction</CardTitle>
-                <CardDescription>Générez chaque section individuellement ou toutes à la fois</CardDescription>
+                <CardDescription>Générez et éditez chaque section</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 {introductionSections.map((section) => {
@@ -429,7 +678,6 @@ const ThesisWriting = () => {
                   onClick={generateAllIntroduction} 
                   disabled={isLoading}
                   className="w-full"
-                  variant="hero"
                 >
                   {isLoading ? (
                     <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Génération...</>
@@ -439,18 +687,18 @@ const ThesisWriting = () => {
                 </Button>
 
                 {generatedSections.length > 0 && (
-                  <Button onClick={exportDocument} variant="outline" className="w-full">
-                    <Download className="w-4 h-4 mr-2" /> Exporter
+                  <Button onClick={handleExportWord} variant="outline" className="w-full">
+                    <FileType className="w-4 h-4 mr-2" /> Export Word
                   </Button>
                 )}
 
-                <Button variant="outline" onClick={() => setStep(5)} className="w-full">
+                <Button variant="outline" onClick={() => { setStep(5); saveProject(); }} className="w-full">
                   Partie théorique <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Generated Content */}
+            {/* Generated Content with Editor */}
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
@@ -459,6 +707,9 @@ const ThesisWriting = () => {
                     <Badge>{generatedSections.length}/{introductionSections.length} sections</Badge>
                   )}
                 </CardTitle>
+                <CardDescription>
+                  Cliquez sur "Modifier" pour éditer une section comme dans Word
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[600px] pr-4">
@@ -473,17 +724,51 @@ const ThesisWriting = () => {
                         <div key={section.id} className="border rounded-lg p-4">
                           <div className="flex items-center justify-between mb-3">
                             <h3 className="font-bold text-lg">{section.title}</h3>
-                            <Button 
-                              size="sm" 
-                              variant="ghost"
-                              onClick={() => copyToClipboard(section.content)}
+                            <div className="flex gap-2">
+                              <Button 
+                                size="sm" 
+                                variant={editingSectionId === section.id ? "secondary" : "ghost"}
+                                onClick={() => setEditingSectionId(
+                                  editingSectionId === section.id ? null : section.id
+                                )}
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                onClick={() => copyToClipboard(section.content)}
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {editingSectionId === section.id ? (
+                            <div className="space-y-2">
+                              <RichTextEditor
+                                content={section.content}
+                                onChange={(content) => updateSectionContent(section.id, content)}
+                              />
+                              <Button 
+                                size="sm" 
+                                onClick={() => {
+                                  setEditingSectionId(null);
+                                  saveProject();
+                                }}
+                              >
+                                <Save className="w-4 h-4 mr-2" /> Enregistrer
+                              </Button>
+                            </div>
+                          ) : (
+                            <div 
+                              className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap"
+                              style={{ fontFamily: '"Times New Roman", Times, serif', lineHeight: 1.5 }}
                             >
-                              <Copy className="w-4 h-4" />
-                            </Button>
-                          </div>
-                          <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
-                            {section.content}
-                          </div>
+                              {section.content}
+                            </div>
+                          )}
+                          
                           {section.references && section.references.length > 0 && (
                             <div className="mt-4 pt-4 border-t">
                               <p className="text-sm font-medium mb-2">Références utilisées:</p>
@@ -535,19 +820,52 @@ const ThesisWriting = () => {
                 <div key={section.id} className="border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-bold text-lg">{section.title}</h3>
-                    <Button 
-                      size="sm" 
-                      variant="ghost"
-                      onClick={() => copyToClipboard(section.content)}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <ScrollArea className="h-[400px]">
-                    <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
-                      {section.content}
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant={editingSectionId === section.id ? "secondary" : "ghost"}
+                        onClick={() => setEditingSectionId(
+                          editingSectionId === section.id ? null : section.id
+                        )}
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => copyToClipboard(section.content)}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
                     </div>
-                  </ScrollArea>
+                  </div>
+                  
+                  {editingSectionId === section.id ? (
+                    <div className="space-y-2">
+                      <RichTextEditor
+                        content={section.content}
+                        onChange={(content) => updateSectionContent(section.id, content)}
+                      />
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          setEditingSectionId(null);
+                          saveProject();
+                        }}
+                      >
+                        <Save className="w-4 h-4 mr-2" /> Enregistrer
+                      </Button>
+                    </div>
+                  ) : (
+                    <ScrollArea className="h-[400px]">
+                      <div 
+                        className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap"
+                        style={{ fontFamily: '"Times New Roman", Times, serif', lineHeight: 1.5 }}
+                      >
+                        {section.content}
+                      </div>
+                    </ScrollArea>
+                  )}
                 </div>
               ))}
 
@@ -555,8 +873,8 @@ const ThesisWriting = () => {
                 <Button variant="outline" onClick={() => setStep(4)}>
                   <ArrowLeft className="w-4 h-4 mr-2" /> Retour à l'introduction
                 </Button>
-                <Button onClick={exportDocument} disabled={generatedSections.length === 0}>
-                  <Download className="w-4 h-4 mr-2" /> Exporter tout
+                <Button onClick={handleExportWord} disabled={generatedSections.length === 0}>
+                  <FileType className="w-4 h-4 mr-2" /> Export Word
                 </Button>
               </div>
 
