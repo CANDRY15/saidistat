@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, ArrowLeft, Calculator } from "lucide-react";
+import { ArrowLeft, Calculator } from "lucide-react";
 import { Link } from "react-router-dom";
+import saidistatLogo from "@/assets/saidistat-logo.jpg";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -12,11 +13,11 @@ const TTest = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link to="/dashboard" className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-                <BarChart3 className="w-6 h-6 text-primary-foreground" />
+              <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg">
+                <img src={saidistatLogo} alt="SaidiStat Logo" className="w-full h-full object-cover" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                BioStasmarT
+                SaidiStat
               </span>
             </Link>
             <Link to="/statistical-tests">

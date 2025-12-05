@@ -1,7 +1,8 @@
 import { Card } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import { Link, useNavigate } from "react-router-dom";
-import { Activity, BarChart3, FileSearch, TestTube, TrendingUp, Users } from "lucide-react";
+import { Activity, FileSearch, TestTube, TrendingUp, Users } from "lucide-react";
+import saidistatLogo from "@/assets/saidistat-logo.jpg";
 
 const exerciseTypes = [
   {
@@ -40,7 +41,7 @@ const exerciseTypes = [
     id: "mortality-rates",
     title: "Taux de Mortalité",
     description: "Calculer mortalité brute, spécifique, proportionnelle, létalité",
-    icon: BarChart3,
+    icon: TrendingUp,
     path: "/epidemiology/mortality-rates",
     color: "bg-red-500",
   },
@@ -69,7 +70,12 @@ export default function EpidemiologyExercises() {
           >
             ← Retour au tableau de bord
           </Link>
-          <h1 className="text-3xl font-bold text-primary">BioStasmarT</h1>
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg">
+              <img src={saidistatLogo} alt="SaidiStat Logo" className="w-full h-full object-cover" />
+            </div>
+            <h1 className="text-3xl font-bold text-primary">SaidiStat</h1>
+          </div>
         </div>
 
         <div className="max-w-6xl mx-auto">

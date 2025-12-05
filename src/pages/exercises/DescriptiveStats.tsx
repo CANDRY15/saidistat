@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Calculator, Printer } from "lucide-react";
+import saidistatLogo from "@/assets/saidistat-logo.jpg";
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -166,11 +167,11 @@ const DescriptiveStats = () => {
               </Button>
             </Link>
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-                <Calculator className="w-6 h-6 text-primary-foreground" />
+              <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg">
+                <img src={saidistatLogo} alt="SaidiStat Logo" className="w-full h-full object-cover" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                BioStasmarT
+                SaidiStat
               </span>
             </div>
             <div className="w-24" />

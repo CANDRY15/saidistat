@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import Navigation from "@/components/Navigation";
 import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import saidistatLogo from "@/assets/saidistat-logo.jpg";
 
 export default function FrequencyMeasures() {
   // Prevalence
@@ -59,7 +60,12 @@ export default function FrequencyMeasures() {
           >
             ← Retour aux exercices
           </Link>
-          <h1 className="text-3xl font-bold text-primary">BioStasmarT</h1>
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg">
+              <img src={saidistatLogo} alt="SaidiStat Logo" className="w-full h-full object-cover" />
+            </div>
+            <h1 className="text-3xl font-bold text-primary">SaidiStat</h1>
+          </div>
         </div>
 
         <div className="max-w-5xl mx-auto">

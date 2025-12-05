@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Navigation from "@/components/Navigation";
 import { Link } from "react-router-dom";
+import saidistatLogo from "@/assets/saidistat-logo.jpg";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 
@@ -96,7 +97,12 @@ export default function StudyIdentifier() {
           >
             ← Retour aux exercices
           </Link>
-          <h1 className="text-3xl font-bold text-primary">BioStasmarT</h1>
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg">
+              <img src={saidistatLogo} alt="SaidiStat Logo" className="w-full h-full object-cover" />
+            </div>
+            <h1 className="text-3xl font-bold text-primary">SaidiStat</h1>
+          </div>
         </div>
 
         <div className="max-w-4xl mx-auto">
