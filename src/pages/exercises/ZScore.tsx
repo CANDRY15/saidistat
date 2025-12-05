@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Calculator } from "lucide-react";
+import saidistatLogo from "@/assets/saidistat-logo.jpg";
 import { toast } from "sonner";
 
 interface ZScoreResult {
@@ -87,11 +88,11 @@ const ZScore = () => {
               </Button>
             </Link>
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-                <Calculator className="w-6 h-6 text-primary-foreground" />
+              <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg">
+                <img src={saidistatLogo} alt="SaidiStat Logo" className="w-full h-full object-cover" />
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                BioStasmarT
+                SaidiStat
               </span>
             </div>
             <div className="w-24" />

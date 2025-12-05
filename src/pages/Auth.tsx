@@ -5,10 +5,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link, useNavigate } from "react-router-dom";
-import { BarChart3, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import saidistatLogo from "@/assets/saidistat-logo.jpg";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -46,7 +47,7 @@ const Auth = () => {
     } else {
       toast({
         title: "Connexion réussie",
-        description: "Bienvenue sur BioStasmarT !",
+        description: "Bienvenue sur SaidiStat !",
       });
       navigate("/dashboard");
     }
@@ -119,11 +120,11 @@ const Auth = () => {
 
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-            <BarChart3 className="w-7 h-7 text-primary-foreground" />
+          <div className="w-12 h-12 rounded-full overflow-hidden shadow-lg">
+            <img src={saidistatLogo} alt="SaidiStat Logo" className="w-full h-full object-cover" />
           </div>
           <span className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            BioStasmarT
+            SaidiStat
           </span>
         </div>
 
