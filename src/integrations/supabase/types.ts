@@ -76,6 +76,8 @@ export type Database = {
       }
       thesis_projects: {
         Row: {
+          bibliography: Json | null
+          citation_format: string | null
           created_at: string
           current_step: number | null
           domain: string | null
@@ -91,6 +93,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          bibliography?: Json | null
+          citation_format?: string | null
           created_at?: string
           current_step?: number | null
           domain?: string | null
@@ -106,6 +110,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          bibliography?: Json | null
+          citation_format?: string | null
           created_at?: string
           current_step?: number | null
           domain?: string | null
