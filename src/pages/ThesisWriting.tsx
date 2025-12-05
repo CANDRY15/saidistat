@@ -8,7 +8,7 @@ import {
   BarChart3, ArrowLeft, ArrowRight, BookOpen, FileText, 
   CheckCircle, Loader2, Copy, Download, Sparkles, GraduationCap,
   Target, FileSearch, Lightbulb, List, BookText, FlaskConical,
-  Edit3, Save, FolderOpen, Plus, Trash2, FileType
+  Edit3, Save, FolderOpen, Plus, Trash2, FileType, BookMarked
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/contexts/AuthContext";
 import RichTextEditor from "@/components/RichTextEditor";
+import ReferenceManager, { Reference, CitationFormat } from "@/components/ReferenceManager";
 import { exportToWord } from "@/lib/exportWord";
 import {
   Dialog,
@@ -56,6 +57,8 @@ interface ThesisProject {
   study_type_approved: boolean;
   current_step: number;
   generated_sections: GeneratedSection[];
+  bibliography?: Reference[];
+  citation_format?: CitationFormat;
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +85,11 @@ const ThesisWriting = () => {
   const [currentProject, setCurrentProject] = useState<ThesisProject | null>(null);
   const [savedProjects, setSavedProjects] = useState<ThesisProject[]>([]);
   const [showProjectsDialog, setShowProjectsDialog] = useState(false);
+  
+  // Bibliography state
+  const [bibliography, setBibliography] = useState<Reference[]>([]);
+  const [citationFormat, setCitationFormat] = useState<CitationFormat>('apa');
+  const [showReferences, setShowReferences] = useState(false);
 
   const introductionSections = [
     { id: 'context', title: 'Contexte et justification', icon: Lightbulb },
@@ -118,7 +126,9 @@ const ThesisWriting = () => {
       const projects = (data || []).map(p => ({
         ...p,
         study_type: p.study_type as unknown as StudyTypeResult | null,
-        generated_sections: (p.generated_sections as unknown as GeneratedSection[]) || []
+        generated_sections: (p.generated_sections as unknown as GeneratedSection[]) || [],
+        bibliography: (p.bibliography as unknown as Reference[]) || [],
+        citation_format: (p.citation_format as CitationFormat) || 'apa'
       }));
       
       setSavedProjects(projects);
@@ -137,6 +147,8 @@ const ThesisWriting = () => {
     setStudyType(project.study_type);
     setStudyTypeApproved(project.study_type_approved);
     setGeneratedSections(project.generated_sections || []);
+    setBibliography(project.bibliography || []);
+    setCitationFormat(project.citation_format || 'apa');
     setStep(project.current_step);
     setShowProjectsDialog(false);
     toast.success("Projet chargé");
@@ -158,6 +170,8 @@ const ThesisWriting = () => {
         study_type_approved: studyTypeApproved,
         current_step: step,
         generated_sections: generatedSections as any,
+        bibliography: bibliography as any,
+        citation_format: citationFormat,
       };
 
       if (currentProject) {
@@ -182,7 +196,9 @@ const ThesisWriting = () => {
         setCurrentProject({
           ...data,
           study_type: data.study_type as unknown as StudyTypeResult | null,
-          generated_sections: (data.generated_sections as unknown as GeneratedSection[]) || []
+          generated_sections: (data.generated_sections as unknown as GeneratedSection[]) || [],
+          bibliography: (data.bibliography as unknown as Reference[]) || [],
+          citation_format: (data.citation_format as CitationFormat) || 'apa'
         });
         toast.success("Nouveau projet créé");
       }
@@ -227,6 +243,8 @@ const ThesisWriting = () => {
     setStudyType(null);
     setStudyTypeApproved(false);
     setGeneratedSections([]);
+    setBibliography([]);
+    setCitationFormat('apa');
     setStep(1);
     setCurrentProject(null);
   };
@@ -349,7 +367,7 @@ const ThesisWriting = () => {
 
   const handleExportWord = async () => {
     try {
-      await exportToWord(generatedSections, topic);
+      await exportToWord(generatedSections, topic, bibliography, citationFormat);
       toast.success("Document Word exporté avec formatage académique");
     } catch (error) {
       console.error('Export error:', error);
@@ -686,6 +704,15 @@ const ThesisWriting = () => {
                   )}
                 </Button>
 
+                <Button 
+                  variant={showReferences ? "secondary" : "outline"} 
+                  onClick={() => setShowReferences(!showReferences)} 
+                  className="w-full"
+                >
+                  <BookMarked className="w-4 h-4 mr-2" />
+                  Références ({bibliography.length})
+                </Button>
+
                 {generatedSections.length > 0 && (
                   <Button onClick={handleExportWord} variant="outline" className="w-full">
                     <FileType className="w-4 h-4 mr-2" /> Export Word
@@ -698,19 +725,40 @@ const ThesisWriting = () => {
               </CardContent>
             </Card>
 
+            {/* References Panel (when shown) */}
+            {showReferences && (
+              <Card className="lg:col-span-2">
+                <CardContent className="pt-6">
+                  <ReferenceManager
+                    references={bibliography}
+                    onReferencesChange={(refs) => {
+                      setBibliography(refs);
+                      setTimeout(() => saveProject(), 500);
+                    }}
+                    citationFormat={citationFormat}
+                    onFormatChange={(format) => {
+                      setCitationFormat(format);
+                      setTimeout(() => saveProject(), 500);
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            )}
+
             {/* Generated Content with Editor */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Contenu généré</span>
-                  {generatedSections.length > 0 && (
-                    <Badge>{generatedSections.length}/{introductionSections.length} sections</Badge>
-                  )}
-                </CardTitle>
-                <CardDescription>
-                  Cliquez sur "Modifier" pour éditer une section comme dans Word
-                </CardDescription>
-              </CardHeader>
+            {!showReferences && (
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Contenu généré</span>
+                    {generatedSections.length > 0 && (
+                      <Badge>{generatedSections.length}/{introductionSections.length} sections</Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>
+                    Cliquez sur "Modifier" pour éditer une section comme dans Word
+                  </CardDescription>
+                </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[600px] pr-4">
                   {generatedSections.length === 0 ? (
@@ -786,6 +834,7 @@ const ThesisWriting = () => {
                 </ScrollArea>
               </CardContent>
             </Card>
+            )}
           </div>
         )}
 

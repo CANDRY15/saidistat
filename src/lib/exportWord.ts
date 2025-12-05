@@ -1,5 +1,6 @@
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel, convertInchesToTwip } from 'docx';
 import { saveAs } from 'file-saver';
+import { Reference, CitationFormat, formatReference } from '@/components/ReferenceManager';
 
 interface Section {
   id: string;
@@ -13,40 +14,6 @@ const htmlToText = (html: string): string => {
   const div = document.createElement('div');
   div.innerHTML = html;
   return div.textContent || div.innerText || '';
-};
-
-// Parse HTML and extract text with formatting info
-const parseHtmlContent = (html: string): { text: string; bold?: boolean; italic?: boolean }[] => {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  
-  const results: { text: string; bold?: boolean; italic?: boolean }[] = [];
-  
-  const processNode = (node: Node, bold = false, italic = false) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      if (node.textContent?.trim()) {
-        results.push({ text: node.textContent, bold, italic });
-      }
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const element = node as Element;
-      const tagName = element.tagName.toLowerCase();
-      
-      const newBold = bold || tagName === 'strong' || tagName === 'b';
-      const newItalic = italic || tagName === 'em' || tagName === 'i';
-      
-      if (tagName === 'br') {
-        results.push({ text: '\n' });
-      } else if (tagName === 'p' || tagName === 'div') {
-        node.childNodes.forEach(child => processNode(child, newBold, newItalic));
-        results.push({ text: '\n' });
-      } else {
-        node.childNodes.forEach(child => processNode(child, newBold, newItalic));
-      }
-    }
-  };
-  
-  processNode(div);
-  return results;
 };
 
 // Create paragraphs from content
@@ -95,7 +62,61 @@ const createParagraphsFromContent = (content: string): Paragraph[] => {
   return paragraphs;
 };
 
-export const exportToWord = async (sections: Section[], title: string) => {
+// Create reference paragraphs with proper formatting
+const createReferenceParagraphs = (
+  references: Reference[], 
+  format: CitationFormat
+): Paragraph[] => {
+  const paragraphs: Paragraph[] = [];
+  
+  // Section title
+  paragraphs.push(
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: 'RÉFÉRENCES BIBLIOGRAPHIQUES',
+          bold: true,
+          font: 'Times New Roman',
+          size: 28, // 14pt
+        }),
+      ],
+      spacing: { before: 480, after: 240, line: 360 },
+      alignment: AlignmentType.LEFT,
+    })
+  );
+  
+  // Each reference
+  references.forEach((ref, i) => {
+    const formattedRef = formatReference(ref, format, i + 1);
+    
+    paragraphs.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: formattedRef,
+            font: 'Times New Roman',
+            size: 24, // 12pt
+          }),
+        ],
+        spacing: { before: 120, after: 120, line: 360 },
+        alignment: AlignmentType.JUSTIFIED,
+        indent: format === 'apa' ? {
+          left: convertInchesToTwip(0.5),
+          hanging: convertInchesToTwip(0.5),
+        } : undefined,
+      })
+    );
+  });
+  
+  return paragraphs;
+};
+
+export const exportToWord = async (
+  sections: Section[], 
+  title: string,
+  references?: Reference[],
+  citationFormat: CitationFormat = 'apa'
+) => {
   const children: Paragraph[] = [];
   
   // Main title
@@ -137,7 +158,7 @@ export const exportToWord = async (sections: Section[], title: string) => {
     const contentParagraphs = createParagraphsFromContent(section.content);
     children.push(...contentParagraphs);
     
-    // References if any
+    // Legacy references (inline in section) if any
     if (section.references && section.references.length > 0) {
       children.push(
         new Paragraph({
@@ -170,6 +191,12 @@ export const exportToWord = async (sections: Section[], title: string) => {
       });
     }
   });
+  
+  // Add bibliography section if references provided
+  if (references && references.length > 0) {
+    const refParagraphs = createReferenceParagraphs(references, citationFormat);
+    children.push(...refParagraphs);
+  }
   
   const doc = new Document({
     sections: [
