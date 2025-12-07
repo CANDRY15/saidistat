@@ -2,3 +2,6 @@ project_id = "vwxlmrrdiikkdaimgrwi"
 
 [functions.thesis-writing-ai]
 verify_jwt = false
+
+[functions.epidemiology-ai]
+verify_jwt = false
