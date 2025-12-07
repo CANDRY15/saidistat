@@ -6,12 +6,14 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
+  refreshSession: async () => {},
 });
 
 export const useAuth = () => {
@@ -27,13 +29,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const refreshSession = async () => {
+    try {
+      const { data: { session: refreshedSession }, error } = await supabase.auth.refreshSession();
+      if (error) {
+        console.error('Error refreshing session:', error);
+        return;
+      }
+      if (refreshedSession) {
+        setSession(refreshedSession);
+        setUser(refreshedSession.user);
+      }
+    } catch (error) {
+      console.error('Failed to refresh session:', error);
+    }
+  };
+
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        console.log('Auth state changed:', event);
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        
+        // Auto-refresh when token is about to expire
+        if (event === 'TOKEN_REFRESHED') {
+          console.log('Token refreshed successfully');
+        }
       }
     );
 
@@ -44,11 +68,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    // Set up periodic session refresh every 10 minutes
+    const refreshInterval = setInterval(() => {
+      if (session) {
+        refreshSession();
+      }
+    }, 10 * 60 * 1000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearInterval(refreshInterval);
+    };
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, loading }}>
+    <AuthContext.Provider value={{ user, session, loading, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );
