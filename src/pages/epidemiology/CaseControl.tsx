@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Navigation from "@/components/Navigation";
 import { Link } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+import { Sparkles } from "lucide-react";
 import saidistatLogo from "@/assets/saidistat-logo.jpg";
 
 export default function CaseControl() {
@@ -13,6 +15,35 @@ export default function CaseControl() {
   const [c, setC] = useState<string>("");
   const [d, setD] = useState<string>("");
   const [results, setResults] = useState<any>(null);
+  const [aiExercise, setAiExercise] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const storedValues = sessionStorage.getItem("epidemiology-ai-values");
+    const storedExercise = sessionStorage.getItem("epidemiology-ai-exercise");
+    
+    if (storedValues) {
+      try {
+        const values = JSON.parse(storedValues);
+        if (values.a !== null) setA(values.a.toString());
+        if (values.b !== null) setB(values.b.toString());
+        if (values.c !== null) setC(values.c.toString());
+        if (values.d !== null) setD(values.d.toString());
+        
+        if (storedExercise) setAiExercise(storedExercise);
+        
+        sessionStorage.removeItem("epidemiology-ai-values");
+        sessionStorage.removeItem("epidemiology-ai-exercise");
+        
+        toast({
+          title: "Valeurs pré-remplies par l'IA",
+          description: "Vérifiez les valeurs et cliquez sur Calculer",
+        });
+      } catch (e) {
+        console.error("Error parsing AI values:", e);
+      }
+    }
+  }, [toast]);
 
   const calculate = () => {
     const val_a = parseFloat(a);

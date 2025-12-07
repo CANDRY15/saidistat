@@ -3,6 +3,7 @@ import Navigation from "@/components/Navigation";
 import { Link, useNavigate } from "react-router-dom";
 import { Activity, FileSearch, TestTube, TrendingUp, Users } from "lucide-react";
 import saidistatLogo from "@/assets/saidistat-logo.jpg";
+import EpidemiologyAIAssistant from "@/components/EpidemiologyAIAssistant";
 
 const exerciseTypes = [
   {
@@ -79,11 +80,20 @@ export default function EpidemiologyExercises() {
         </div>
 
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12">
+          <div className="text-center mb-8">
             <h2 className="text-4xl font-bold mb-4">Exercices d'Épidémiologie</h2>
             <p className="text-lg text-muted-foreground">
               Résolvez vos exercices pratiques d'épidémiologie avec calculs détaillés
             </p>
+          </div>
+
+          {/* AI Assistant Section */}
+          <div className="mb-10">
+            <EpidemiologyAIAssistant />
+          </div>
+
+          <div className="text-center mb-8">
+            <h3 className="text-2xl font-semibold text-muted-foreground">Ou choisissez manuellement</h3>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
