@@ -478,3 +478,173 @@ export const exportAnalysisToExcel = (result: any, fileName: string = 'analyse')
   const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
   saveAs(blob, `${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
 };
+
+// Export contingency table to Word
+export const exportContingencyToWord = async (test: any) => {
+  const rows = Object.keys(test.contingencyTable || {});
+  const cols = Object.keys(test.contingencyTable?.[rows[0]] || {});
+  
+  const a = test.contingencyTable?.[rows[0]]?.[cols[0]] || 0;
+  const b = test.contingencyTable?.[rows[0]]?.[cols[1]] || 0;
+  const c = test.contingencyTable?.[rows[1]]?.[cols[0]] || 0;
+  const d = test.contingencyTable?.[rows[1]]?.[cols[1]] || 0;
+  
+  const n1 = a + b;
+  const n0 = c + d;
+  const m1 = a + c;
+  const m0 = b + d;
+  const n = a + b + c + d;
+
+  const children: (Paragraph | Table)[] = [];
+
+  // Title
+  children.push(new Paragraph({
+    children: [new TextRun({
+      text: `Table de contingence 2×2`,
+      bold: true,
+      font: 'Arial',
+      size: 36,
+    })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 200 },
+  }));
+
+  children.push(new Paragraph({
+    children: [new TextRun({
+      text: `${test.variable1} × ${test.variable2}`,
+      font: 'Arial',
+      size: 28,
+      bold: true,
+    })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 400 },
+  }));
+
+  // Contingency table
+  const contingencyTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({
+        children: [
+          createHeaderCell(`${test.variable1} \\ ${test.variable2}`),
+          createHeaderCell(cols[0] || '+'),
+          createHeaderCell(cols[1] || '-'),
+          createHeaderCell('Total'),
+        ],
+      }),
+      new TableRow({
+        children: [
+          createHeaderCell(rows[0] || 'Exposé'),
+          createCell(`a = ${a}`, AlignmentType.CENTER),
+          createCell(`b = ${b}`, AlignmentType.CENTER),
+          createCell(`n₁ = ${n1}`, AlignmentType.CENTER),
+        ],
+      }),
+      new TableRow({
+        children: [
+          createHeaderCell(rows[1] || 'Non exposé'),
+          createCell(`c = ${c}`, AlignmentType.CENTER),
+          createCell(`d = ${d}`, AlignmentType.CENTER),
+          createCell(`n₀ = ${n0}`, AlignmentType.CENTER),
+        ],
+      }),
+      new TableRow({
+        children: [
+          createHeaderCell('Total'),
+          createCell(`m₁ = ${m1}`, AlignmentType.CENTER),
+          createCell(`m₀ = ${m0}`, AlignmentType.CENTER),
+          createCell(`N = ${n}`, AlignmentType.CENTER),
+        ],
+      }),
+    ],
+  });
+
+  children.push(contingencyTable as any);
+  children.push(new Paragraph({ children: [], spacing: { after: 300 } }));
+
+  // Legend
+  children.push(createSubTitle('Légende'));
+  children.push(createTextParagraph('a = Exposés malades'));
+  children.push(createTextParagraph('b = Exposés non malades'));
+  children.push(createTextParagraph('c = Non exposés malades'));
+  children.push(createTextParagraph('d = Non exposés non malades'));
+
+  children.push(new Paragraph({ children: [], spacing: { after: 300 } }));
+
+  // Test results
+  children.push(createSubTitle('Résultats du test Chi²'));
+  children.push(createTextParagraph(`Chi² = ${test.chi2 || 'N/A'}`));
+  children.push(createTextParagraph(`Degrés de liberté = ${test.df || 'N/A'}`));
+  children.push(createTextParagraph(`p-value = ${test.pValue || 'N/A'}`));
+  children.push(createTextParagraph(`Significatif (α=0.05) = ${test.pValue < 0.05 ? 'Oui' : 'Non'}`));
+
+  const doc = new Document({
+    sections: [{
+      properties: {
+        page: {
+          margin: {
+            top: convertInchesToTwip(1),
+            right: convertInchesToTwip(1),
+            bottom: convertInchesToTwip(1),
+            left: convertInchesToTwip(1),
+          },
+        },
+      },
+      children: children as any,
+    }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, `table_contingence_${test.variable1}_${test.variable2}.docx`.replace(/[^a-zA-Z0-9_\.]/g, '_'));
+};
+
+// Export contingency table to Excel (CSV)
+export const exportContingencyToExcel = (test: any) => {
+  const BOM = '\uFEFF';
+  const rows = Object.keys(test.contingencyTable || {});
+  const cols = Object.keys(test.contingencyTable?.[rows[0]] || {});
+  
+  const a = test.contingencyTable?.[rows[0]]?.[cols[0]] || 0;
+  const b = test.contingencyTable?.[rows[0]]?.[cols[1]] || 0;
+  const c = test.contingencyTable?.[rows[1]]?.[cols[0]] || 0;
+  const d = test.contingencyTable?.[rows[1]]?.[cols[1]] || 0;
+  
+  const n1 = a + b;
+  const n0 = c + d;
+  const m1 = a + c;
+  const m0 = b + d;
+  const n = a + b + c + d;
+
+  let csvContent = '';
+  
+  csvContent += `Table de contingence 2×2: ${test.variable1} × ${test.variable2}\n\n`;
+  
+  // Header
+  csvContent += `;${cols[0] || '+'};${cols[1] || '-'};Total\n`;
+  
+  // Row 1
+  csvContent += `${rows[0] || 'Exposé'};a = ${a};b = ${b};n₁ = ${n1}\n`;
+  
+  // Row 2  
+  csvContent += `${rows[1] || 'Non exposé'};c = ${c};d = ${d};n₀ = ${n0}\n`;
+  
+  // Totals
+  csvContent += `Total;m₁ = ${m1};m₀ = ${m0};N = ${n}\n\n`;
+  
+  // Legend
+  csvContent += `Légende\n`;
+  csvContent += `a;Exposés malades\n`;
+  csvContent += `b;Exposés non malades\n`;
+  csvContent += `c;Non exposés malades\n`;
+  csvContent += `d;Non exposés non malades\n\n`;
+  
+  // Test results
+  csvContent += `Résultats du test Chi²\n`;
+  csvContent += `Chi²;${test.chi2 || 'N/A'}\n`;
+  csvContent += `Degrés de liberté;${test.df || 'N/A'}\n`;
+  csvContent += `p-value;${test.pValue || 'N/A'}\n`;
+  csvContent += `Significatif (α=0.05);${test.pValue < 0.05 ? 'Oui' : 'Non'}\n`;
+
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
+  saveAs(blob, `table_contingence_${test.variable1}_${test.variable2}.csv`.replace(/[^a-zA-Z0-9_\.]/g, '_'));
+};
