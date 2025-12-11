@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter } from 'recharts';
 import html2canvas from 'html2canvas';
-import { exportAnalysisToWord, exportAnalysisToExcel } from '@/lib/exportAnalysis';
+import { exportAnalysisToWord, exportAnalysisToExcel, exportContingencyToWord, exportContingencyToExcel } from '@/lib/exportAnalysis';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -256,11 +256,25 @@ const DataAnalysis = () => {
   };
 
   const handleVariableToggle = (variable: string) => {
-    setSelectedVariables(prev => 
-      prev.includes(variable) 
-        ? prev.filter(v => v !== variable)
-        : [...prev, variable]
-    );
+    // Pour l'analyse d'association chi2, limiter à 2 variables
+    if (analysisType === 'association' && analysisSubType === 'chi2') {
+      setSelectedVariables(prev => {
+        if (prev.includes(variable)) {
+          return prev.filter(v => v !== variable);
+        }
+        // Si déjà 2 variables sélectionnées, remplacer la dernière
+        if (prev.length >= 2) {
+          return [prev[0], variable];
+        }
+        return [...prev, variable];
+      });
+    } else {
+      setSelectedVariables(prev => 
+        prev.includes(variable) 
+          ? prev.filter(v => v !== variable)
+          : [...prev, variable]
+      );
+    }
   };
 
   const resetAnalysis = () => {
@@ -444,6 +458,72 @@ const DataAnalysis = () => {
     ));
   };
 
+  // Render 2x2 contingency table for association results
+  const render2x2ContingencyTable = (test: any) => {
+    if (!test.contingencyTable) return null;
+    
+    const rows = Object.keys(test.contingencyTable);
+    const cols = Object.keys(test.contingencyTable[rows[0]] || {});
+    
+    // Get the 2x2 values
+    const a = test.contingencyTable[rows[0]]?.[cols[0]] || 0;
+    const b = test.contingencyTable[rows[0]]?.[cols[1]] || 0;
+    const c = test.contingencyTable[rows[1]]?.[cols[0]] || 0;
+    const d = test.contingencyTable[rows[1]]?.[cols[1]] || 0;
+    
+    const n1 = a + b; // Total row 1
+    const n0 = c + d; // Total row 2
+    const m1 = a + c; // Total col 1
+    const m0 = b + d; // Total col 2
+    const n = a + b + c + d; // Grand total
+    
+    return (
+      <div className="space-y-4">
+        <h4 className="font-semibold">Table de contingence 2×2</h4>
+        <div className="overflow-x-auto">
+          <Table className="border">
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="border text-center font-bold">{test.variable1} \ {test.variable2}</TableHead>
+                <TableHead className="border text-center font-bold">{cols[0] || '+'}</TableHead>
+                <TableHead className="border text-center font-bold">{cols[1] || '-'}</TableHead>
+                <TableHead className="border text-center font-bold bg-primary/10">Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell className="border font-medium bg-muted/30">{rows[0] || 'Exposé'}</TableCell>
+                <TableCell className="border text-center text-lg font-bold text-primary">a = {a}</TableCell>
+                <TableCell className="border text-center text-lg font-bold text-secondary">b = {b}</TableCell>
+                <TableCell className="border text-center font-bold bg-primary/10">n₁ = {n1}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="border font-medium bg-muted/30">{rows[1] || 'Non exposé'}</TableCell>
+                <TableCell className="border text-center text-lg font-bold text-primary">c = {c}</TableCell>
+                <TableCell className="border text-center text-lg font-bold text-secondary">d = {d}</TableCell>
+                <TableCell className="border text-center font-bold bg-primary/10">n₀ = {n0}</TableCell>
+              </TableRow>
+              <TableRow className="bg-primary/10">
+                <TableCell className="border font-bold">Total</TableCell>
+                <TableCell className="border text-center font-bold">m₁ = {m1}</TableCell>
+                <TableCell className="border text-center font-bold">m₀ = {m0}</TableCell>
+                <TableCell className="border text-center font-bold">N = {n}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+        
+        {/* Légende */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
+          <div><span className="font-bold text-primary">a</span> = Exposés malades</div>
+          <div><span className="font-bold text-secondary">b</span> = Exposés non malades</div>
+          <div><span className="font-bold text-primary">c</span> = Non exposés malades</div>
+          <div><span className="font-bold text-secondary">d</span> = Non exposés non malades</div>
+        </div>
+      </div>
+    );
+  };
+
   // Render association results
   const renderAssociationResults = () => {
     if (!analysisResult || analysisResult.type !== 'association') return null;
@@ -451,56 +531,35 @@ const DataAnalysis = () => {
     if (analysisResult.chi2Tests) {
       return analysisResult.chi2Tests.map((test: any, idx: number) => (
         <Card key={idx} className="mb-6">
-          <CardHeader>
-            <CardTitle>Test du Chi² : {test.variable1} × {test.variable2}</CardTitle>
-            <CardDescription>
-              Test d'indépendance entre deux variables catégorielles
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Test du Chi² : {test.variable1} × {test.variable2}</CardTitle>
+              <CardDescription>
+                Test d'indépendance entre deux variables catégorielles
+              </CardDescription>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Download className="w-4 h-4 mr-2" />
+                  Exporter
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => exportContingencyToWord(test)}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Word (.docx)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportContingencyToExcel(test)}>
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Excel (.csv)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Tableau de contingence */}
-            {test.contingencyTable && (
-              <div>
-                <h4 className="font-semibold mb-3">Tableau de contingence (effectifs observés)</h4>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{test.variable1} / {test.variable2}</TableHead>
-                        {Object.keys(test.contingencyTable[Object.keys(test.contingencyTable)[0]]).map((col: string) => (
-                          <TableHead key={col} className="text-right">{col}</TableHead>
-                        ))}
-                        <TableHead className="text-right font-bold">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {Object.entries(test.contingencyTable).map(([row, values]: [string, any]) => {
-                        const rowTotal = Object.values(values).reduce((sum: number, val: any) => sum + val, 0) as number;
-                        return (
-                          <TableRow key={row}>
-                            <TableCell className="font-medium">{row}</TableCell>
-                            {Object.values(values).map((val: any, idx: number) => (
-                              <TableCell key={idx} className="text-right">{val}</TableCell>
-                            ))}
-                            <TableCell className="text-right font-bold">{rowTotal}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                      <TableRow className="font-bold bg-muted/50">
-                        <TableCell>Total</TableCell>
-                        {Object.keys(test.contingencyTable[Object.keys(test.contingencyTable)[0]]).map((col: string, idx: number) => {
-                          const colTotal = Object.values(test.contingencyTable).reduce(
-                            (sum: number, row: any) => sum + (row[col] || 0), 0
-                          ) as number;
-                          return <TableCell key={idx} className="text-right">{colTotal}</TableCell>;
-                        })}
-                        <TableCell className="text-right">{test.n}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
+            {/* Table de contingence 2x2 */}
+            {render2x2ContingencyTable(test)}
 
             {/* Résultats du test */}
             <div>
@@ -948,6 +1007,16 @@ const DataAnalysis = () => {
           <Card className="max-w-4xl mx-auto">
             <CardHeader>
               <CardTitle>Étape 3 : Sélection des variables</CardTitle>
+              {analysisType === 'association' && analysisSubType === 'chi2' && (
+                <CardDescription>
+                  Sélectionnez exactement 2 variables pour construire la table de contingence 2×2
+                  {selectedVariables.length > 0 && (
+                    <span className="ml-2 text-primary font-medium">
+                      ({selectedVariables.length}/2 sélectionnées)
+                    </span>
+                  )}
+                </CardDescription>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid md:grid-cols-3 gap-3">
@@ -960,8 +1029,17 @@ const DataAnalysis = () => {
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => setStep(2)}>Retour</Button>
-                <Button onClick={handleRunAnalysis} disabled={selectedVariables.length === 0} className="flex-1">
-                  Analyser
+                <Button 
+                  onClick={handleRunAnalysis} 
+                  disabled={
+                    selectedVariables.length === 0 || 
+                    (analysisType === 'association' && analysisSubType === 'chi2' && selectedVariables.length !== 2)
+                  } 
+                  className="flex-1"
+                >
+                  {analysisType === 'association' && analysisSubType === 'chi2' 
+                    ? 'Construire la table de contingence' 
+                    : 'Analyser'}
                 </Button>
               </div>
             </CardContent>
