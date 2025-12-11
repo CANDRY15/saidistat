@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Database, ArrowLeft, TrendingUp, FileText, FileSpreadsheet, Check, Link2, Save, FolderOpen, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Upload, Database, ArrowLeft, TrendingUp, FileText, FileSpreadsheet, Check, Link2, Save, FolderOpen, ChevronLeft, ChevronRight, Eye, Download } from "lucide-react";
 import saidistatLogo from "@/assets/saidistat-logo.jpg";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter } from 'recharts';
 import html2canvas from 'html2canvas';
+import { exportAnalysisToWord, exportAnalysisToExcel } from '@/lib/exportAnalysis';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -976,6 +978,24 @@ const DataAnalysis = () => {
                   <Eye className="w-4 h-4 mr-2" />
                   Données brutes
                 </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                      <Download className="w-4 h-4 mr-2" />
+                      Exporter
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => exportAnalysisToWord(analysisResult, `analyse_${new Date().toISOString().split('T')[0]}`)}>
+                      <FileText className="w-4 h-4 mr-2" />
+                      Exporter en Word (.docx)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => exportAnalysisToExcel(analysisResult, `analyse_${new Date().toISOString().split('T')[0]}`)}>
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      Exporter en Excel (.csv)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
                   <DialogTrigger asChild>
                     <Button variant="outline">
