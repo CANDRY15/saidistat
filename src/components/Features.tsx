@@ -51,18 +51,18 @@ const features = [
 
 const Features = () => {
   return (
-    <section className="py-24 bg-gradient-to-b from-background to-muted/30">
+    <section className="py-12 sm:py-24 bg-gradient-to-b from-background to-muted/30">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+        <div className="text-center mb-8 sm:mb-16">
+          <h2 className="text-2xl sm:text-4xl md:text-5xl font-bold mb-3 sm:mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Fonctionnalités Principales
           </h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-base sm:text-xl text-muted-foreground max-w-2xl mx-auto px-2">
             Tout ce dont vous avez besoin pour mener à bien vos projets de recherche médicale
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {features.map((feature, index) => {
             const Icon = feature.icon;
             return (
@@ -70,17 +70,17 @@ const Features = () => {
                 key={index} 
                 className="group hover:shadow-xl transition-all duration-300 border-border hover:border-primary/50 overflow-hidden"
               >
-                <CardContent className="p-6">
-                  <div className="relative mb-4">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="relative mb-3 sm:mb-4">
                     <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-10 rounded-lg blur-xl group-hover:opacity-20 transition-opacity`} />
-                    <div className={`relative w-16 h-16 rounded-lg bg-gradient-to-br ${feature.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
-                      <Icon className="w-8 h-8 text-primary-foreground" />
+                    <div className={`relative w-12 h-12 sm:w-16 sm:h-16 rounded-lg bg-gradient-to-br ${feature.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                      <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-primary-foreground" />
                     </div>
                   </div>
-                  <h3 className="text-xl font-semibold mb-2 group-hover:text-primary transition-colors">
+                  <h3 className="text-lg sm:text-xl font-semibold mb-1.5 sm:mb-2 group-hover:text-primary transition-colors">
                     {feature.title}
                   </h3>
-                  <p className="text-muted-foreground leading-relaxed">
+                  <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
                     {feature.description}
                   </p>
                 </CardContent>
