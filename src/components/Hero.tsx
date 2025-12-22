@@ -16,59 +16,59 @@ const Hero = () => {
         />
       </div>
 
-      {/* Animated gradient blobs */}
-      <div className="absolute top-20 right-20 w-72 h-72 bg-primary/30 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-20 left-20 w-96 h-96 bg-secondary/20 rounded-full blur-3xl animate-pulse delay-1000" />
+      {/* Animated gradient blobs - hidden on mobile for performance */}
+      <div className="hidden sm:block absolute top-20 right-20 w-48 md:w-72 h-48 md:h-72 bg-primary/30 rounded-full blur-3xl animate-pulse" />
+      <div className="hidden sm:block absolute bottom-20 left-20 w-64 md:w-96 h-64 md:h-96 bg-secondary/20 rounded-full blur-3xl animate-pulse delay-1000" />
 
       {/* Content */}
-      <div className="container relative z-20 mx-auto px-4 py-32">
+      <div className="container relative z-20 mx-auto px-4 py-20 sm:py-32">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6 animate-fade-in">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-primary">
+          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-primary/10 border border-primary/20 mb-4 sm:mb-6 animate-fade-in">
+            <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-primary" />
+            <span className="text-xs sm:text-sm font-medium text-primary">
               Plateforme d'analyse biostatistique
             </span>
           </div>
 
-          <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent animate-fade-in-up">
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold mb-4 sm:mb-6 bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent animate-fade-in-up">
             SaidiStat
           </h1>
 
-          <p className="text-xl md:text-2xl text-muted-foreground mb-8 leading-relaxed animate-fade-in-up animation-delay-200">
+          <p className="text-base sm:text-xl md:text-2xl text-muted-foreground mb-6 sm:mb-8 leading-relaxed px-2 animate-fade-in-up animation-delay-200">
             Votre assistant intelligent pour l'analyse statistique médicale et la rédaction scientifique
           </p>
 
-          <p className="text-lg text-muted-foreground mb-12 max-w-2xl mx-auto animate-fade-in-up animation-delay-300">
+          <p className="text-sm sm:text-base md:text-lg text-muted-foreground mb-8 sm:mb-12 max-w-2xl mx-auto px-2 animate-fade-in-up animation-delay-300">
             Analysez vos données, générez automatiquement vos rapports scientifiques et maîtrisez les biostatistiques grâce à une plateforme intuitive conçue pour les chercheurs et professionnels de santé.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-in-up animation-delay-400">
-            <Link to="/auth">
-              <Button variant="hero" size="lg" className="group">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 px-4 animate-fade-in-up animation-delay-400">
+            <Link to="/auth" className="w-full sm:w-auto">
+              <Button variant="hero" size="lg" className="group w-full sm:w-auto">
                 Commencer gratuitement
-                <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 ml-2 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
-            <Link to="/features">
-              <Button variant="outline" size="lg">
+            <Link to="/features" className="w-full sm:w-auto">
+              <Button variant="outline" size="lg" className="w-full sm:w-auto">
                 Découvrir les fonctionnalités
               </Button>
             </Link>
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-20 animate-fade-in-up animation-delay-500">
-            <div className="p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-border">
-              <div className="text-4xl font-bold text-primary mb-2">10+</div>
-              <div className="text-muted-foreground">Tests statistiques</div>
+          <div className="grid grid-cols-3 gap-3 sm:gap-8 mt-12 sm:mt-20 animate-fade-in-up animation-delay-500">
+            <div className="p-3 sm:p-6 rounded-xl sm:rounded-2xl bg-card/50 backdrop-blur-sm border border-border">
+              <div className="text-2xl sm:text-4xl font-bold text-primary mb-1 sm:mb-2">10+</div>
+              <div className="text-xs sm:text-base text-muted-foreground">Tests statistiques</div>
             </div>
-            <div className="p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-border">
-              <div className="text-4xl font-bold text-secondary mb-2">100%</div>
-              <div className="text-muted-foreground">Automatisé</div>
+            <div className="p-3 sm:p-6 rounded-xl sm:rounded-2xl bg-card/50 backdrop-blur-sm border border-border">
+              <div className="text-2xl sm:text-4xl font-bold text-secondary mb-1 sm:mb-2">100%</div>
+              <div className="text-xs sm:text-base text-muted-foreground">Automatisé</div>
             </div>
-            <div className="p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-border">
-              <div className="text-4xl font-bold text-accent mb-2">∞</div>
-              <div className="text-muted-foreground">Analyses possibles</div>
+            <div className="p-3 sm:p-6 rounded-xl sm:rounded-2xl bg-card/50 backdrop-blur-sm border border-border">
+              <div className="text-2xl sm:text-4xl font-bold text-accent mb-1 sm:mb-2">∞</div>
+              <div className="text-xs sm:text-base text-muted-foreground">Analyses possibles</div>
             </div>
           </div>
         </div>
