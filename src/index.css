@@ -126,6 +126,14 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+
+  /* Padding for mobile bottom navigation */
+  @media (max-width: 767px) {
+    main,
+    .page-content {
+      padding-bottom: 5rem;
+    }
+  }
 }
 
 @layer utilities {
