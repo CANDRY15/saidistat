@@ -204,33 +204,44 @@ serve(async (req) => {
   try {
     console.log('Running association analysis...');
     
-    const { data, variables, analysisSubType } = await req.json();
+    const { data, variables, analysisSubType, baseVariable, crossingVariables } = await req.json();
     
     if (!data || !Array.isArray(data) || data.length === 0) {
       throw new Error('No data provided');
-    }
-    
-    if (!variables || variables.length < 2) {
-      throw new Error('At least 2 variables are required for association analysis');
     }
 
     let results: any = {};
     
     if (analysisSubType === 'chi2') {
-      // Chi-squared test between all pairs of categorical variables
+      // EPI INFO style: base variable crossed with each crossing variable
       const chi2Results: Chi2Result[] = [];
       
-      for (let i = 0; i < variables.length; i++) {
-        for (let j = i + 1; j < variables.length; j++) {
-          const result = calculateChi2(data, variables[i], variables[j]);
+      if (baseVariable && crossingVariables && crossingVariables.length > 0) {
+        // New workflow: one table per crossing variable
+        for (const crossVar of crossingVariables) {
+          const result = calculateChi2(data, baseVariable, crossVar);
           chi2Results.push(result);
         }
+      } else if (variables && variables.length >= 2) {
+        // Legacy: pairs between all variables
+        for (let i = 0; i < variables.length; i++) {
+          for (let j = i + 1; j < variables.length; j++) {
+            const result = calculateChi2(data, variables[i], variables[j]);
+            chi2Results.push(result);
+          }
+        }
+      } else {
+        throw new Error('Variables insuffisantes pour l\'analyse Chi²');
       }
       
       results = { chi2Tests: chi2Results };
       console.log(`Chi2 tests completed: ${chi2Results.length} tests`);
       
     } else if (analysisSubType === 'correlation') {
+      if (!variables || variables.length < 2) {
+        throw new Error('At least 2 variables are required for correlation analysis');
+      }
+      
       // Correlation between all pairs of numeric variables
       const correlations: CorrelationResult[] = [];
       

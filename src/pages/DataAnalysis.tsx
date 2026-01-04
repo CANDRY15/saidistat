@@ -12,7 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter } from 'recharts';
 import html2canvas from 'html2canvas';
-import { exportAnalysisToWord, exportAnalysisToExcel, exportContingencyToWord, exportContingencyToExcel } from '@/lib/exportAnalysis';
+import { exportAnalysisToWord, exportAnalysisToExcel, exportContingencyToWord, exportContingencyToExcel, exportAllContingencyToWord, exportAllContingencyToExcel } from '@/lib/exportAnalysis';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -60,6 +60,10 @@ const DataAnalysis = () => {
   const [analysisName, setAnalysisName] = useState("");
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const rowsPerPage = 10;
+  
+  // New state for EPI INFO-style workflow
+  const [baseVariable, setBaseVariable] = useState<string | null>(null);
+  const [crossingVariables, setCrossingVariables] = useState<string[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -125,7 +129,21 @@ const DataAnalysis = () => {
   };
 
   const handleRunAnalysis = async () => {
-    if (!uploadedData || !analysisType || selectedVariables.length === 0) return;
+    if (!uploadedData || !analysisType) return;
+    
+    // For chi2, use the new workflow
+    if (analysisType === 'association' && analysisSubType === 'chi2') {
+      if (!baseVariable || crossingVariables.length === 0) {
+        toast({
+          title: "Sélection incomplète",
+          description: "Veuillez sélectionner une variable de base et au moins une variable de croisement",
+          variant: "destructive",
+        });
+        return;
+      }
+    } else if (selectedVariables.length === 0) {
+      return;
+    }
     
     setIsAnalyzing(true);
     setStep(4);
@@ -152,11 +170,18 @@ const DataAnalysis = () => {
           throw new Error('Veuillez sélectionner un type d\'analyse d\'association');
         }
 
+        // Use the new workflow for chi2
+        const variablesToSend = analysisSubType === 'chi2' 
+          ? [baseVariable!, ...crossingVariables]
+          : selectedVariables;
+
         const { data, error } = await supabase.functions.invoke('association-analysis', {
           body: {
             data: uploadedData.preview,
-            variables: selectedVariables,
-            analysisSubType
+            variables: variablesToSend,
+            analysisSubType,
+            baseVariable: analysisSubType === 'chi2' ? baseVariable : undefined,
+            crossingVariables: analysisSubType === 'chi2' ? crossingVariables : undefined
           }
         });
 
@@ -165,6 +190,8 @@ const DataAnalysis = () => {
         results = {
           type: 'association',
           subType: analysisSubType,
+          baseVariable,
+          crossingVariables,
           ...data
         };
       } else if (analysisType === 'advanced') {
@@ -191,9 +218,13 @@ const DataAnalysis = () => {
       
       setAnalysisResult(results);
       
+      const varCount = analysisSubType === 'chi2' 
+        ? crossingVariables.length 
+        : selectedVariables.length;
+      
       toast({
         title: "Analyse terminée",
-        description: `${selectedVariables.length} variable(s) analysée(s) avec succès`,
+        description: `${varCount} variable(s) analysée(s) avec succès`,
       });
     } catch (error: any) {
       console.error('Analysis error:', error);
@@ -256,25 +287,27 @@ const DataAnalysis = () => {
   };
 
   const handleVariableToggle = (variable: string) => {
-    // Pour l'analyse d'association chi2, limiter à 2 variables
-    if (analysisType === 'association' && analysisSubType === 'chi2') {
-      setSelectedVariables(prev => {
-        if (prev.includes(variable)) {
-          return prev.filter(v => v !== variable);
-        }
-        // Si déjà 2 variables sélectionnées, remplacer la dernière
-        if (prev.length >= 2) {
-          return [prev[0], variable];
-        }
-        return [...prev, variable];
-      });
-    } else {
-      setSelectedVariables(prev => 
-        prev.includes(variable) 
-          ? prev.filter(v => v !== variable)
-          : [...prev, variable]
-      );
-    }
+    // For non-chi2, use the old behavior
+    setSelectedVariables(prev => 
+      prev.includes(variable) 
+        ? prev.filter(v => v !== variable)
+        : [...prev, variable]
+    );
+  };
+
+  const handleBaseVariableChange = (variable: string) => {
+    setBaseVariable(variable);
+    // Remove from crossing variables if it was selected
+    setCrossingVariables(prev => prev.filter(v => v !== variable));
+  };
+
+  const handleCrossingVariableToggle = (variable: string) => {
+    if (variable === baseVariable) return; // Can't cross with itself
+    setCrossingVariables(prev => 
+      prev.includes(variable) 
+        ? prev.filter(v => v !== variable)
+        : [...prev, variable]
+    );
   };
 
   const resetAnalysis = () => {
@@ -287,6 +320,8 @@ const DataAnalysis = () => {
     setAnalysisResult(null);
     setShowRawData(false);
     setCurrentPage(1);
+    setBaseVariable(null);
+    setCrossingVariables([]);
   };
 
   const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', '#8884d8', '#82ca9d', '#ffc658'];
@@ -529,76 +564,120 @@ const DataAnalysis = () => {
     if (!analysisResult || analysisResult.type !== 'association') return null;
 
     if (analysisResult.chi2Tests) {
-      return analysisResult.chi2Tests.map((test: any, idx: number) => (
-        <Card key={idx} className="mb-6">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Test du Chi² : {test.variable1} × {test.variable2}</CardTitle>
-              <CardDescription>
-                Test d'indépendance entre deux variables catégorielles
-              </CardDescription>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Download className="w-4 h-4 mr-2" />
-                  Exporter
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => exportContingencyToWord(test)}>
-                  <FileText className="w-4 h-4 mr-2" />
-                  Word (.docx)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => exportContingencyToExcel(test)}>
-                  <FileSpreadsheet className="w-4 h-4 mr-2" />
-                  Excel (.csv)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Table de contingence 2x2 */}
-            {render2x2ContingencyTable(test)}
+      return (
+        <div className="space-y-6">
+          {/* Export All button for multiple tables */}
+          {analysisResult.chi2Tests.length > 1 && (
+            <Card className="bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/30">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">📊 {analysisResult.chi2Tests.length} tableaux de contingence générés</CardTitle>
+                    {analysisResult.baseVariable && (
+                      <CardDescription>Variable de base : {analysisResult.baseVariable}</CardDescription>
+                    )}
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button>
+                        <Download className="w-4 h-4 mr-2" />
+                        Exporter tout
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => exportAllContingencyToWord(analysisResult.chi2Tests, analysisResult.baseVariable)}>
+                        <FileText className="w-4 h-4 mr-2" />
+                        Tous en Word (.docx)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => exportAllContingencyToExcel(analysisResult.chi2Tests, analysisResult.baseVariable)}>
+                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                        Tous en Excel (.csv)
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </CardHeader>
+            </Card>
+          )}
 
-            {/* Résultats du test */}
-            <div>
-              <h4 className="font-semibold mb-3">Résultats du test</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-muted/50 p-3 rounded-lg">
-                  <p className="text-sm text-muted-foreground">χ² calculé</p>
-                  <p className="text-xl font-bold">{test.chi2}</p>
+          {/* Individual tables */}
+          {analysisResult.chi2Tests.map((test: any, idx: number) => (
+            <Card key={idx}>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <span className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
+                      {idx + 1}
+                    </span>
+                    Test du Chi² : {test.variable1} × {test.variable2}
+                  </CardTitle>
+                  <CardDescription>
+                    Test d'indépendance entre deux variables catégorielles
+                  </CardDescription>
                 </div>
-                <div className="bg-muted/50 p-3 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Degrés de liberté</p>
-                  <p className="text-xl font-bold">{test.df}</p>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-2" />
+                      Exporter
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem onClick={() => exportContingencyToWord(test)}>
+                      <FileText className="w-4 h-4 mr-2" />
+                      Word (.docx)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => exportContingencyToExcel(test)}>
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      Excel (.csv)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Table de contingence 2x2 */}
+                {render2x2ContingencyTable(test)}
+
+                {/* Résultats du test */}
+                <div>
+                  <h4 className="font-semibold mb-3">Résultats du test</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-muted/50 p-3 rounded-lg">
+                      <p className="text-sm text-muted-foreground">χ² calculé</p>
+                      <p className="text-xl font-bold">{test.chi2}</p>
+                    </div>
+                    <div className="bg-muted/50 p-3 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Degrés de liberté</p>
+                      <p className="text-xl font-bold">{test.df}</p>
+                    </div>
+                    <div className="bg-muted/50 p-3 rounded-lg">
+                      <p className="text-sm text-muted-foreground">p-value</p>
+                      <p className="text-xl font-bold">{test.pValue}</p>
+                    </div>
+                    <div className="bg-muted/50 p-3 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Significatif (α=0.05)</p>
+                      <p className={`text-xl font-bold ${test.pValue < 0.05 ? 'text-green-600' : 'text-red-600'}`}>
+                        {test.pValue < 0.05 ? 'Oui' : 'Non'}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-muted/50 p-3 rounded-lg">
-                  <p className="text-sm text-muted-foreground">p-value</p>
-                  <p className="text-xl font-bold">{test.pValue}</p>
-                </div>
-                <div className="bg-muted/50 p-3 rounded-lg">
-                  <p className="text-sm text-muted-foreground">Significatif (α=0.05)</p>
-                  <p className={`text-xl font-bold ${test.pValue < 0.05 ? 'text-green-600' : 'text-red-600'}`}>
-                    {test.pValue < 0.05 ? 'Oui' : 'Non'}
+
+                {/* Interprétation */}
+                <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
+                  <h4 className="font-semibold mb-2">Interprétation</h4>
+                  <p className="text-sm">
+                    {test.pValue < 0.05 
+                      ? `Il existe une association statistiquement significative entre ${test.variable1} et ${test.variable2} (p = ${test.pValue} < 0.05). Les deux variables ne sont pas indépendantes.`
+                      : `Il n'y a pas d'association statistiquement significative entre ${test.variable1} et ${test.variable2} (p = ${test.pValue} ≥ 0.05). Les deux variables peuvent être considérées comme indépendantes.`
+                    }
                   </p>
                 </div>
-              </div>
-            </div>
-
-            {/* Interprétation */}
-            <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
-              <h4 className="font-semibold mb-2">Interprétation</h4>
-              <p className="text-sm">
-                {test.pValue < 0.05 
-                  ? `Il existe une association statistiquement significative entre ${test.variable1} et ${test.variable2} (p = ${test.pValue} < 0.05). Les deux variables ne sont pas indépendantes.`
-                  : `Il n'y a pas d'association statistiquement significative entre ${test.variable1} et ${test.variable2} (p = ${test.pValue} ≥ 0.05). Les deux variables peuvent être considérées comme indépendantes.`
-                }
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ));
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      );
     }
 
     if (analysisResult.correlations) {
@@ -1009,36 +1088,118 @@ const DataAnalysis = () => {
               <CardTitle>Étape 3 : Sélection des variables</CardTitle>
               {analysisType === 'association' && analysisSubType === 'chi2' && (
                 <CardDescription>
-                  Sélectionnez exactement 2 variables pour construire la table de contingence 2×2
-                  {selectedVariables.length > 0 && (
-                    <span className="ml-2 text-primary font-medium">
-                      ({selectedVariables.length}/2 sélectionnées)
-                    </span>
-                  )}
+                  <strong>Style EPI INFO :</strong> Sélectionnez une variable de base (exposition) puis les variables de croisement (outcomes) pour créer des tableaux 2×2 séparés.
                 </CardDescription>
               )}
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid md:grid-cols-3 gap-3">
-                {uploadedData.columns.map((col: string) => (
-                  <div key={col} className="flex items-center gap-2">
-                    <Checkbox checked={selectedVariables.includes(col)} onCheckedChange={() => handleVariableToggle(col)} />
-                    <label className="text-sm">{col}</label>
+            <CardContent className="space-y-6">
+              {/* Chi2 - EPI INFO style workflow */}
+              {analysisType === 'association' && analysisSubType === 'chi2' ? (
+                <div className="space-y-6">
+                  {/* Base variable selection */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">1</div>
+                      <Label className="text-lg font-semibold">Variable de base (Exposition)</Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground ml-10">
+                      Choisissez la variable qui sera en ligne dans tous les tableaux de contingence
+                    </p>
+                    <Select value={baseVariable || ''} onValueChange={handleBaseVariableChange}>
+                      <SelectTrigger className="ml-10 max-w-md">
+                        <SelectValue placeholder="Sélectionner une variable de base..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {uploadedData.columns.map((col: string) => (
+                          <SelectItem key={col} value={col}>{col}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {baseVariable && (
+                      <div className="ml-10 p-2 bg-primary/10 rounded-md inline-block">
+                        <span className="text-sm font-medium">✓ Variable sélectionnée : {baseVariable}</span>
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
+
+                  {/* Crossing variables selection */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center text-sm font-bold">2</div>
+                      <Label className="text-lg font-semibold">Variables de croisement (Outcomes)</Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground ml-10">
+                      Sélectionnez une ou plusieurs variables pour créer un tableau 2×2 par variable
+                    </p>
+                    <div className="ml-10 grid md:grid-cols-3 gap-3 p-4 border rounded-lg bg-muted/30">
+                      {uploadedData.columns
+                        .filter((col: string) => col !== baseVariable)
+                        .map((col: string) => (
+                          <div key={col} className="flex items-center gap-2">
+                            <Checkbox 
+                              checked={crossingVariables.includes(col)} 
+                              onCheckedChange={() => handleCrossingVariableToggle(col)}
+                              disabled={!baseVariable}
+                            />
+                            <label className={`text-sm ${!baseVariable ? 'text-muted-foreground' : ''}`}>{col}</label>
+                          </div>
+                        ))}
+                    </div>
+                    {crossingVariables.length > 0 && (
+                      <div className="ml-10 flex flex-wrap gap-2">
+                        {crossingVariables.map(v => (
+                          <span key={v} className="px-2 py-1 bg-secondary/20 rounded-md text-sm">
+                            {baseVariable} × {v}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Summary */}
+                  {baseVariable && crossingVariables.length > 0 && (
+                    <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                      <h4 className="font-semibold text-green-800 dark:text-green-200 mb-2">
+                        📊 Résumé de l'analyse
+                      </h4>
+                      <p className="text-sm text-green-700 dark:text-green-300">
+                        <strong>{crossingVariables.length}</strong> tableau(x) de contingence 2×2 sera/seront généré(s) :
+                      </p>
+                      <ul className="mt-2 space-y-1">
+                        {crossingVariables.map((v, i) => (
+                          <li key={v} className="text-sm text-green-600 dark:text-green-400">
+                            {i + 1}. {baseVariable} × {v}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Other analysis types - original behavior */
+                <div className="grid md:grid-cols-3 gap-3">
+                  {uploadedData.columns.map((col: string) => (
+                    <div key={col} className="flex items-center gap-2">
+                      <Checkbox checked={selectedVariables.includes(col)} onCheckedChange={() => handleVariableToggle(col)} />
+                      <label className="text-sm">{col}</label>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => setStep(2)}>Retour</Button>
                 <Button 
                   onClick={handleRunAnalysis} 
                   disabled={
-                    selectedVariables.length === 0 || 
-                    (analysisType === 'association' && analysisSubType === 'chi2' && selectedVariables.length !== 2)
+                    (analysisType === 'association' && analysisSubType === 'chi2') 
+                      ? (!baseVariable || crossingVariables.length === 0)
+                      : selectedVariables.length === 0
                   } 
                   className="flex-1"
                 >
                   {analysisType === 'association' && analysisSubType === 'chi2' 
-                    ? 'Construire la table de contingence' 
+                    ? `Générer ${crossingVariables.length || 0} tableau(x) de contingence` 
                     : 'Analyser'}
                 </Button>
               </div>
