@@ -648,3 +648,248 @@ export const exportContingencyToExcel = (test: any) => {
   const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
   saveAs(blob, `table_contingence_${test.variable1}_${test.variable2}.csv`.replace(/[^a-zA-Z0-9_\.]/g, '_'));
 };
+
+// Export all contingency tables to a single Word document
+export const exportAllContingencyToWord = async (tests: any[], baseVariable?: string) => {
+  const children: (Paragraph | Table)[] = [];
+
+  // Main title
+  children.push(new Paragraph({
+    children: [new TextRun({
+      text: `Analyse des associations`,
+      bold: true,
+      font: 'Arial',
+      size: 40,
+    })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 100 },
+  }));
+
+  if (baseVariable) {
+    children.push(new Paragraph({
+      children: [new TextRun({
+        text: `Variable de base : ${baseVariable}`,
+        font: 'Arial',
+        size: 24,
+        italics: true,
+      })],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 400 },
+    }));
+  }
+
+  children.push(new Paragraph({
+    children: [new TextRun({
+      text: `Date : ${new Date().toLocaleDateString('fr-FR')}`,
+      font: 'Arial',
+      size: 20,
+    })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 600 },
+  }));
+
+  // Generate each table
+  tests.forEach((test, index) => {
+    const rows = Object.keys(test.contingencyTable || {});
+    const cols = Object.keys(test.contingencyTable?.[rows[0]] || {});
+    
+    const a = test.contingencyTable?.[rows[0]]?.[cols[0]] || 0;
+    const b = test.contingencyTable?.[rows[0]]?.[cols[1]] || 0;
+    const c = test.contingencyTable?.[rows[1]]?.[cols[0]] || 0;
+    const d = test.contingencyTable?.[rows[1]]?.[cols[1]] || 0;
+    
+    const n1 = a + b;
+    const n0 = c + d;
+    const m1 = a + c;
+    const m0 = b + d;
+    const n = a + b + c + d;
+
+    // Table number and title
+    children.push(new Paragraph({
+      children: [new TextRun({
+        text: `Tableau ${index + 1} : ${test.variable1} × ${test.variable2}`,
+        bold: true,
+        font: 'Arial',
+        size: 28,
+      })],
+      spacing: { before: 400, after: 200 },
+    }));
+
+    // Contingency table
+    const contingencyTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new TableRow({
+          children: [
+            createHeaderCell(`${test.variable1} \\ ${test.variable2}`),
+            createHeaderCell(cols[0] || '+'),
+            createHeaderCell(cols[1] || '-'),
+            createHeaderCell('Total'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            createHeaderCell(rows[0] || 'Exposé'),
+            createCell(`a = ${a}`, AlignmentType.CENTER),
+            createCell(`b = ${b}`, AlignmentType.CENTER),
+            createCell(`n₁ = ${n1}`, AlignmentType.CENTER),
+          ],
+        }),
+        new TableRow({
+          children: [
+            createHeaderCell(rows[1] || 'Non exposé'),
+            createCell(`c = ${c}`, AlignmentType.CENTER),
+            createCell(`d = ${d}`, AlignmentType.CENTER),
+            createCell(`n₀ = ${n0}`, AlignmentType.CENTER),
+          ],
+        }),
+        new TableRow({
+          children: [
+            createHeaderCell('Total'),
+            createCell(`m₁ = ${m1}`, AlignmentType.CENTER),
+            createCell(`m₀ = ${m0}`, AlignmentType.CENTER),
+            createCell(`N = ${n}`, AlignmentType.CENTER),
+          ],
+        }),
+      ],
+    });
+
+    children.push(contingencyTable as any);
+
+    // Test results in compact form
+    children.push(new Paragraph({
+      children: [new TextRun({
+        text: `Résultats : χ² = ${test.chi2 || 'N/A'}, ddl = ${test.df || 'N/A'}, p = ${test.pValue || 'N/A'} → `,
+        font: 'Arial',
+        size: 20,
+      }), new TextRun({
+        text: test.pValue < 0.05 ? 'Association significative' : 'Pas d\'association significative',
+        font: 'Arial',
+        size: 20,
+        bold: true,
+        color: test.pValue < 0.05 ? '008000' : 'CC0000',
+      })],
+      spacing: { before: 100, after: 300 },
+    }));
+
+    // Add separator between tables
+    if (index < tests.length - 1) {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: '─'.repeat(50), font: 'Arial', size: 16, color: 'CCCCCC' })],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 200, after: 200 },
+      }));
+    }
+  });
+
+  // Summary table at the end
+  children.push(new Paragraph({
+    children: [new TextRun({
+      text: 'Récapitulatif des résultats',
+      bold: true,
+      font: 'Arial',
+      size: 28,
+    })],
+    spacing: { before: 600, after: 200 },
+  }));
+
+  const summaryTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({
+        children: [
+          createHeaderCell('Variables'),
+          createHeaderCell('χ²'),
+          createHeaderCell('ddl'),
+          createHeaderCell('p-value'),
+          createHeaderCell('Significatif'),
+        ],
+      }),
+      ...tests.map(test => new TableRow({
+        children: [
+          createCell(`${test.variable1} × ${test.variable2}`),
+          createCell(String(test.chi2 || 'N/A'), AlignmentType.CENTER),
+          createCell(String(test.df || 'N/A'), AlignmentType.CENTER),
+          createCell(String(test.pValue || 'N/A'), AlignmentType.CENTER),
+          createCell(test.pValue < 0.05 ? 'Oui' : 'Non', AlignmentType.CENTER),
+        ],
+      })),
+    ],
+  });
+
+  children.push(summaryTable as any);
+
+  const doc = new Document({
+    sections: [{
+      properties: {
+        page: {
+          margin: {
+            top: convertInchesToTwip(1),
+            right: convertInchesToTwip(1),
+            bottom: convertInchesToTwip(1),
+            left: convertInchesToTwip(1),
+          },
+        },
+      },
+      children: children as any,
+    }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const fileName = baseVariable 
+    ? `tables_contingence_${baseVariable}.docx` 
+    : `tables_contingence_${new Date().toISOString().split('T')[0]}.docx`;
+  saveAs(blob, fileName.replace(/[^a-zA-Z0-9_\.]/g, '_'));
+};
+
+// Export all contingency tables to a single Excel file
+export const exportAllContingencyToExcel = (tests: any[], baseVariable?: string) => {
+  const BOM = '\uFEFF';
+  let csvContent = '';
+
+  csvContent += `Analyse des associations\n`;
+  if (baseVariable) {
+    csvContent += `Variable de base;${baseVariable}\n`;
+  }
+  csvContent += `Date;${new Date().toLocaleDateString('fr-FR')}\n\n`;
+
+  // Generate each table
+  tests.forEach((test, index) => {
+    const rows = Object.keys(test.contingencyTable || {});
+    const cols = Object.keys(test.contingencyTable?.[rows[0]] || {});
+    
+    const a = test.contingencyTable?.[rows[0]]?.[cols[0]] || 0;
+    const b = test.contingencyTable?.[rows[0]]?.[cols[1]] || 0;
+    const c = test.contingencyTable?.[rows[1]]?.[cols[0]] || 0;
+    const d = test.contingencyTable?.[rows[1]]?.[cols[1]] || 0;
+    
+    const n1 = a + b;
+    const n0 = c + d;
+    const m1 = a + c;
+    const m0 = b + d;
+    const n = a + b + c + d;
+
+    csvContent += `Tableau ${index + 1}: ${test.variable1} × ${test.variable2}\n`;
+    csvContent += `;${cols[0] || '+'};${cols[1] || '-'};Total\n`;
+    csvContent += `${rows[0] || 'Exposé'};${a};${b};${n1}\n`;
+    csvContent += `${rows[1] || 'Non exposé'};${c};${d};${n0}\n`;
+    csvContent += `Total;${m1};${m0};${n}\n`;
+    csvContent += `Chi²;${test.chi2 || 'N/A'}\n`;
+    csvContent += `ddl;${test.df || 'N/A'}\n`;
+    csvContent += `p-value;${test.pValue || 'N/A'}\n`;
+    csvContent += `Significatif;${test.pValue < 0.05 ? 'Oui' : 'Non'}\n\n`;
+  });
+
+  // Summary table
+  csvContent += `\nRécapitulatif\n`;
+  csvContent += `Variables;Chi²;ddl;p-value;Significatif\n`;
+  tests.forEach(test => {
+    csvContent += `${test.variable1} × ${test.variable2};${test.chi2 || 'N/A'};${test.df || 'N/A'};${test.pValue || 'N/A'};${test.pValue < 0.05 ? 'Oui' : 'Non'}\n`;
+  });
+
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
+  const fileName = baseVariable 
+    ? `tables_contingence_${baseVariable}.csv` 
+    : `tables_contingence_${new Date().toISOString().split('T')[0]}.csv`;
+  saveAs(blob, fileName.replace(/[^a-zA-Z0-9_\.]/g, '_'));
+};
