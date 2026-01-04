@@ -330,7 +330,7 @@ const Dashboard = () => {
 
         {/* Quick actions */}
         <h2 className="text-2xl font-bold mb-4">Actions rapides</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <Link to="/data-analysis">
             <Card className="group hover:shadow-lg transition-all duration-300 border-border hover:border-primary/50 cursor-pointer h-full">
               <CardHeader className="pb-3">
@@ -360,6 +360,17 @@ const Dashboard = () => {
                   <BookOpen className="w-5 h-5 text-primary-foreground" />
                 </div>
                 <CardTitle className="text-base">Thèse / Mémoire</CardTitle>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link to="/epidemiology">
+            <Card className="group hover:shadow-lg transition-all duration-300 border-border hover:border-destructive/50 cursor-pointer h-full">
+              <CardHeader className="pb-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-destructive to-destructive/80 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                  <Activity className="w-5 h-5 text-destructive-foreground" />
+                </div>
+                <CardTitle className="text-base">Épidémiologie</CardTitle>
               </CardHeader>
             </Card>
           </Link>
