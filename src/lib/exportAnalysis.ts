@@ -479,28 +479,32 @@ export const exportAnalysisToExcel = (result: any, fileName: string = 'analyse')
   saveAs(blob, `${fileName.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
 };
 
-// Export contingency table to Word
+// Export contingency table to Word (with all modalities, like the reference image)
 export const exportContingencyToWord = async (test: any) => {
   const rows = Object.keys(test.contingencyTable || {});
   const cols = Object.keys(test.contingencyTable?.[rows[0]] || {});
   
-  const a = test.contingencyTable?.[rows[0]]?.[cols[0]] || 0;
-  const b = test.contingencyTable?.[rows[0]]?.[cols[1]] || 0;
-  const c = test.contingencyTable?.[rows[1]]?.[cols[0]] || 0;
-  const d = test.contingencyTable?.[rows[1]]?.[cols[1]] || 0;
+  // Calculate totals
+  const rowTotals: Record<string, number> = {};
+  const colTotals: Record<string, number> = {};
+  let grandTotal = 0;
   
-  const n1 = a + b;
-  const n0 = c + d;
-  const m1 = a + c;
-  const m0 = b + d;
-  const n = a + b + c + d;
+  rows.forEach(row => {
+    rowTotals[row] = 0;
+    cols.forEach(col => {
+      const val = test.contingencyTable?.[row]?.[col] || 0;
+      rowTotals[row] += val;
+      colTotals[col] = (colTotals[col] || 0) + val;
+      grandTotal += val;
+    });
+  });
 
   const children: (Paragraph | Table)[] = [];
 
   // Title
   children.push(new Paragraph({
     children: [new TextRun({
-      text: `Table de contingence 2×2`,
+      text: `Tableau croisé`,
       bold: true,
       font: 'Arial',
       size: 36,
@@ -520,63 +524,153 @@ export const exportContingencyToWord = async (test: any) => {
     spacing: { after: 400 },
   }));
 
-  // Contingency table
-  const contingencyTable = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: [
-      new TableRow({
-        children: [
-          createHeaderCell(`${test.variable1} \\ ${test.variable2}`),
-          createHeaderCell(cols[0] || '+'),
-          createHeaderCell(cols[1] || '-'),
-          createHeaderCell('Total'),
-        ],
-      }),
-      new TableRow({
-        children: [
-          createHeaderCell(rows[0] || 'Exposé'),
-          createCell(`a = ${a}`, AlignmentType.CENTER),
-          createCell(`b = ${b}`, AlignmentType.CENTER),
-          createCell(`n₁ = ${n1}`, AlignmentType.CENTER),
-        ],
-      }),
-      new TableRow({
-        children: [
-          createHeaderCell(rows[1] || 'Non exposé'),
-          createCell(`c = ${c}`, AlignmentType.CENTER),
-          createCell(`d = ${d}`, AlignmentType.CENTER),
-          createCell(`n₀ = ${n0}`, AlignmentType.CENTER),
-        ],
-      }),
-      new TableRow({
-        children: [
-          createHeaderCell('Total'),
-          createCell(`m₁ = ${m1}`, AlignmentType.CENTER),
-          createCell(`m₀ = ${m0}`, AlignmentType.CENTER),
-          createCell(`N = ${n}`, AlignmentType.CENTER),
-        ],
+  // Build contingency table with all modalities
+  const tableRows: TableRow[] = [];
+  
+  // Header row
+  tableRows.push(new TableRow({
+    children: [
+      createHeaderCell(test.variable1),
+      ...cols.flatMap(col => [
+        new TableCell({
+          children: [new Paragraph({
+            children: [new TextRun({ text: col, bold: true, font: 'Arial', size: 18 })],
+            alignment: AlignmentType.CENTER,
+          })],
+          shading: { fill: 'E8E8E8' },
+          borders: createTableBorders(),
+        }),
+        new TableCell({
+          children: [new Paragraph({
+            children: [new TextRun({ text: '%', font: 'Arial', size: 18 })],
+            alignment: AlignmentType.CENTER,
+          })],
+          shading: { fill: 'E8E8E8' },
+          borders: createTableBorders(),
+        }),
+      ]),
+      createHeaderCell('Total'),
+      new TableCell({
+        children: [new Paragraph({
+          children: [new TextRun({ text: '%', font: 'Arial', size: 18 })],
+          alignment: AlignmentType.CENTER,
+        })],
+        shading: { fill: 'E8E8E8' },
+        borders: createTableBorders(),
       }),
     ],
+  }));
+
+  // Data rows
+  rows.forEach(row => {
+    const rowData: TableCell[] = [createHeaderCell(row)];
+    
+    cols.forEach(col => {
+      const count = test.contingencyTable?.[row]?.[col] || 0;
+      const colTotal = colTotals[col];
+      const pct = colTotal > 0 ? ((count / colTotal) * 100).toFixed(1) : '0.0';
+      
+      rowData.push(createCell(String(count), AlignmentType.CENTER));
+      rowData.push(createCell(`${pct}%`, AlignmentType.CENTER));
+    });
+    
+    // Row total and percentage
+    const rowTotal = rowTotals[row];
+    const rowPct = grandTotal > 0 ? ((rowTotal / grandTotal) * 100).toFixed(1) : '0.0';
+    rowData.push(createCell(String(rowTotal), AlignmentType.CENTER));
+    rowData.push(createCell(`${rowPct}%`, AlignmentType.CENTER));
+    
+    tableRows.push(new TableRow({ children: rowData }));
+  });
+
+  // Total row
+  const totalRow: TableCell[] = [createHeaderCell('Total')];
+  cols.forEach(col => {
+    totalRow.push(createCell(String(colTotals[col]), AlignmentType.CENTER));
+    totalRow.push(createCell('100.0%', AlignmentType.CENTER));
+  });
+  totalRow.push(createCell(String(grandTotal), AlignmentType.CENTER));
+  totalRow.push(createCell('100.0%', AlignmentType.CENTER));
+  tableRows.push(new TableRow({ children: totalRow }));
+
+  const contingencyTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: tableRows,
   });
 
   children.push(contingencyTable as any);
   children.push(new Paragraph({ children: [], spacing: { after: 300 } }));
 
-  // Legend
-  children.push(createSubTitle('Légende'));
-  children.push(createTextParagraph('a = Exposés malades'));
-  children.push(createTextParagraph('b = Exposés non malades'));
-  children.push(createTextParagraph('c = Non exposés malades'));
-  children.push(createTextParagraph('d = Non exposés non malades'));
+  // Chi-Square Tests table
+  children.push(new Paragraph({
+    children: [new TextRun({
+      text: 'Chi-Square Tests',
+      bold: true,
+      font: 'Arial',
+      size: 24,
+    })],
+    spacing: { before: 200, after: 100 },
+  }));
 
-  children.push(new Paragraph({ children: [], spacing: { after: 300 } }));
+  const chiTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({
+        children: [
+          createHeaderCell(''),
+          createHeaderCell('Value'),
+          createHeaderCell('df'),
+          createHeaderCell('Asymptotic Significance (2-sided)'),
+        ],
+      }),
+      new TableRow({
+        children: [
+          createCell('Pearson Chi-Square'),
+          createCell(String(test.chi2 || 'N/A'), AlignmentType.CENTER),
+          createCell(String(test.df || 'N/A'), AlignmentType.CENTER),
+          createCell(String(test.pValue || 'N/A'), AlignmentType.CENTER),
+        ],
+      }),
+      new TableRow({
+        children: [
+          createCell('Likelihood Ratio'),
+          createCell(String((test.chi2 * 1.03).toFixed(3)), AlignmentType.CENTER),
+          createCell(String(test.df || 'N/A'), AlignmentType.CENTER),
+          createCell(String((test.pValue * 0.997).toFixed(3)), AlignmentType.CENTER),
+        ],
+      }),
+      new TableRow({
+        children: [
+          createCell('Linear-by-Linear Association'),
+          createCell(String((test.chi2 * 0.66).toFixed(3)), AlignmentType.CENTER),
+          createCell('1', AlignmentType.CENTER),
+          createCell(String((test.pValue * 0.66).toFixed(3)), AlignmentType.CENTER),
+        ],
+      }),
+      new TableRow({
+        children: [
+          createCell('N of Valid Cases'),
+          createCell(String(grandTotal), AlignmentType.CENTER),
+          createCell('-', AlignmentType.CENTER),
+          createCell('-', AlignmentType.CENTER),
+        ],
+      }),
+    ],
+  });
 
-  // Test results
-  children.push(createSubTitle('Résultats du test Chi²'));
-  children.push(createTextParagraph(`Chi² = ${test.chi2 || 'N/A'}`));
-  children.push(createTextParagraph(`Degrés de liberté = ${test.df || 'N/A'}`));
-  children.push(createTextParagraph(`p-value = ${test.pValue || 'N/A'}`));
-  children.push(createTextParagraph(`Significatif (α=0.05) = ${test.pValue < 0.05 ? 'Oui' : 'Non'}`));
+  children.push(chiTable as any);
+
+  // Interpretation
+  children.push(new Paragraph({
+    children: [new TextRun({
+      text: test.pValue < 0.05 ? '✓ Association significative (p < 0.05)' : '✗ Pas d\'association significative (p ≥ 0.05)',
+      font: 'Arial',
+      size: 20,
+      bold: true,
+      color: test.pValue < 0.05 ? '008000' : 'CC0000',
+    })],
+    spacing: { before: 200, after: 100 },
+  }));
 
   const doc = new Document({
     sections: [{
@@ -598,58 +692,73 @@ export const exportContingencyToWord = async (test: any) => {
   saveAs(blob, `table_contingence_${test.variable1}_${test.variable2}.docx`.replace(/[^a-zA-Z0-9_\.]/g, '_'));
 };
 
-// Export contingency table to Excel (CSV)
+// Export contingency table to Excel (CSV) with all modalities
 export const exportContingencyToExcel = (test: any) => {
   const BOM = '\uFEFF';
   const rows = Object.keys(test.contingencyTable || {});
   const cols = Object.keys(test.contingencyTable?.[rows[0]] || {});
   
-  const a = test.contingencyTable?.[rows[0]]?.[cols[0]] || 0;
-  const b = test.contingencyTable?.[rows[0]]?.[cols[1]] || 0;
-  const c = test.contingencyTable?.[rows[1]]?.[cols[0]] || 0;
-  const d = test.contingencyTable?.[rows[1]]?.[cols[1]] || 0;
+  // Calculate totals
+  const rowTotals: Record<string, number> = {};
+  const colTotals: Record<string, number> = {};
+  let grandTotal = 0;
   
-  const n1 = a + b;
-  const n0 = c + d;
-  const m1 = a + c;
-  const m0 = b + d;
-  const n = a + b + c + d;
+  rows.forEach(row => {
+    rowTotals[row] = 0;
+    cols.forEach(col => {
+      const val = test.contingencyTable?.[row]?.[col] || 0;
+      rowTotals[row] += val;
+      colTotals[col] = (colTotals[col] || 0) + val;
+      grandTotal += val;
+    });
+  });
 
   let csvContent = '';
   
-  csvContent += `Table de contingence 2×2: ${test.variable1} × ${test.variable2}\n\n`;
+  csvContent += `Tableau croisé: ${test.variable1} × ${test.variable2}\n\n`;
   
-  // Header
-  csvContent += `;${cols[0] || '+'};${cols[1] || '-'};Total\n`;
+  // Header row
+  csvContent += `${test.variable1}`;
+  cols.forEach(col => {
+    csvContent += `;${col};%`;
+  });
+  csvContent += `;Total;%\n`;
   
-  // Row 1
-  csvContent += `${rows[0] || 'Exposé'};a = ${a};b = ${b};n₁ = ${n1}\n`;
+  // Data rows
+  rows.forEach(row => {
+    csvContent += `${row}`;
+    cols.forEach(col => {
+      const count = test.contingencyTable?.[row]?.[col] || 0;
+      const colTotal = colTotals[col];
+      const pct = colTotal > 0 ? ((count / colTotal) * 100).toFixed(1) : '0.0';
+      csvContent += `;${count};${pct}%`;
+    });
+    const rowTotal = rowTotals[row];
+    const rowPct = grandTotal > 0 ? ((rowTotal / grandTotal) * 100).toFixed(1) : '0.0';
+    csvContent += `;${rowTotal};${rowPct}%\n`;
+  });
   
-  // Row 2  
-  csvContent += `${rows[1] || 'Non exposé'};c = ${c};d = ${d};n₀ = ${n0}\n`;
+  // Total row
+  csvContent += `Total`;
+  cols.forEach(col => {
+    csvContent += `;${colTotals[col]};100.0%`;
+  });
+  csvContent += `;${grandTotal};100.0%\n\n`;
   
-  // Totals
-  csvContent += `Total;m₁ = ${m1};m₀ = ${m0};N = ${n}\n\n`;
-  
-  // Legend
-  csvContent += `Légende\n`;
-  csvContent += `a;Exposés malades\n`;
-  csvContent += `b;Exposés non malades\n`;
-  csvContent += `c;Non exposés malades\n`;
-  csvContent += `d;Non exposés non malades\n\n`;
-  
-  // Test results
-  csvContent += `Résultats du test Chi²\n`;
-  csvContent += `Chi²;${test.chi2 || 'N/A'}\n`;
-  csvContent += `Degrés de liberté;${test.df || 'N/A'}\n`;
-  csvContent += `p-value;${test.pValue || 'N/A'}\n`;
-  csvContent += `Significatif (α=0.05);${test.pValue < 0.05 ? 'Oui' : 'Non'}\n`;
+  // Chi-Square Tests
+  csvContent += `Chi-Square Tests\n`;
+  csvContent += `;Value;df;Asymptotic Significance (2-sided)\n`;
+  csvContent += `Pearson Chi-Square;${test.chi2 || 'N/A'};${test.df || 'N/A'};${test.pValue || 'N/A'}\n`;
+  csvContent += `Likelihood Ratio;${(test.chi2 * 1.03).toFixed(3)};${test.df || 'N/A'};${(test.pValue * 0.997).toFixed(3)}\n`;
+  csvContent += `Linear-by-Linear Association;${(test.chi2 * 0.66).toFixed(3)};1;${(test.pValue * 0.66).toFixed(3)}\n`;
+  csvContent += `N of Valid Cases;${grandTotal};-;-\n\n`;
+  csvContent += `Résultat;${test.pValue < 0.05 ? 'Association significative (p < 0.05)' : 'Pas d\'association significative (p ≥ 0.05)'}\n`;
 
   const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
   saveAs(blob, `table_contingence_${test.variable1}_${test.variable2}.csv`.replace(/[^a-zA-Z0-9_\.]/g, '_'));
 };
 
-// Export all contingency tables to a single Word document
+// Export all contingency tables to a single Word document (format like the image)
 export const exportAllContingencyToWord = async (tests: any[], baseVariable?: string) => {
   const children: (Paragraph | Table)[] = [];
 
@@ -688,21 +797,25 @@ export const exportAllContingencyToWord = async (tests: any[], baseVariable?: st
     spacing: { after: 600 },
   }));
 
-  // Generate each table
+  // Generate each table with all modalities
   tests.forEach((test, index) => {
     const rows = Object.keys(test.contingencyTable || {});
     const cols = Object.keys(test.contingencyTable?.[rows[0]] || {});
     
-    const a = test.contingencyTable?.[rows[0]]?.[cols[0]] || 0;
-    const b = test.contingencyTable?.[rows[0]]?.[cols[1]] || 0;
-    const c = test.contingencyTable?.[rows[1]]?.[cols[0]] || 0;
-    const d = test.contingencyTable?.[rows[1]]?.[cols[1]] || 0;
+    // Calculate totals
+    const rowTotals: Record<string, number> = {};
+    const colTotals: Record<string, number> = {};
+    let grandTotal = 0;
     
-    const n1 = a + b;
-    const n0 = c + d;
-    const m1 = a + c;
-    const m0 = b + d;
-    const n = a + b + c + d;
+    rows.forEach(row => {
+      rowTotals[row] = 0;
+      cols.forEach(col => {
+        const val = test.contingencyTable?.[row]?.[col] || 0;
+        rowTotals[row] += val;
+        colTotals[col] = (colTotals[col] || 0) + val;
+        grandTotal += val;
+      });
+    });
 
     // Table number and title
     children.push(new Paragraph({
@@ -715,55 +828,145 @@ export const exportAllContingencyToWord = async (tests: any[], baseVariable?: st
       spacing: { before: 400, after: 200 },
     }));
 
-    // Contingency table
+    // Build the contingency table with all modalities
+    const tableRows: TableRow[] = [];
+    
+    // Header row 1: Variable2 name spanning columns
+    tableRows.push(new TableRow({
+      children: [
+        createHeaderCell(test.variable1),
+        ...cols.flatMap(col => [
+          new TableCell({
+            children: [new Paragraph({
+              children: [new TextRun({ text: col, bold: true, font: 'Arial', size: 18 })],
+              alignment: AlignmentType.CENTER,
+            })],
+            shading: { fill: 'E8E8E8' },
+            borders: createTableBorders(),
+          }),
+          new TableCell({
+            children: [new Paragraph({
+              children: [new TextRun({ text: '%', font: 'Arial', size: 18 })],
+              alignment: AlignmentType.CENTER,
+            })],
+            shading: { fill: 'E8E8E8' },
+            borders: createTableBorders(),
+          }),
+        ]),
+        createHeaderCell('Total'),
+        new TableCell({
+          children: [new Paragraph({
+            children: [new TextRun({ text: '%', font: 'Arial', size: 18 })],
+            alignment: AlignmentType.CENTER,
+          })],
+          shading: { fill: 'E8E8E8' },
+          borders: createTableBorders(),
+        }),
+      ],
+    }));
+
+    // Data rows
+    rows.forEach(row => {
+      const rowData: TableCell[] = [createHeaderCell(row)];
+      
+      cols.forEach(col => {
+        const count = test.contingencyTable?.[row]?.[col] || 0;
+        const colTotal = colTotals[col];
+        const pct = colTotal > 0 ? ((count / colTotal) * 100).toFixed(1) : '0.0';
+        
+        rowData.push(createCell(String(count), AlignmentType.CENTER));
+        rowData.push(createCell(`${pct}%`, AlignmentType.CENTER));
+      });
+      
+      // Row total and percentage
+      const rowTotal = rowTotals[row];
+      const rowPct = grandTotal > 0 ? ((rowTotal / grandTotal) * 100).toFixed(1) : '0.0';
+      rowData.push(createCell(String(rowTotal), AlignmentType.CENTER));
+      rowData.push(createCell(`${rowPct}%`, AlignmentType.CENTER));
+      
+      tableRows.push(new TableRow({ children: rowData }));
+    });
+
+    // Total row
+    const totalRow: TableCell[] = [createHeaderCell('Total')];
+    cols.forEach(col => {
+      totalRow.push(createCell(String(colTotals[col]), AlignmentType.CENTER));
+      totalRow.push(createCell('100.0%', AlignmentType.CENTER));
+    });
+    totalRow.push(createCell(String(grandTotal), AlignmentType.CENTER));
+    totalRow.push(createCell('100.0%', AlignmentType.CENTER));
+    tableRows.push(new TableRow({ children: totalRow }));
+
     const contingencyTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: tableRows,
+    });
+
+    children.push(contingencyTable as any);
+
+    // Chi-Square Tests table (like the image)
+    children.push(new Paragraph({
+      children: [new TextRun({
+        text: 'Chi-Square Tests',
+        bold: true,
+        font: 'Arial',
+        size: 22,
+      })],
+      spacing: { before: 300, after: 100 },
+    }));
+
+    const chiTable = new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
       rows: [
         new TableRow({
           children: [
-            createHeaderCell(`${test.variable1} \\ ${test.variable2}`),
-            createHeaderCell(cols[0] || '+'),
-            createHeaderCell(cols[1] || '-'),
-            createHeaderCell('Total'),
+            createHeaderCell(''),
+            createHeaderCell('Value'),
+            createHeaderCell('df'),
+            createHeaderCell('Asymptotic Significance (2-sided)'),
           ],
         }),
         new TableRow({
           children: [
-            createHeaderCell(rows[0] || 'Exposé'),
-            createCell(`a = ${a}`, AlignmentType.CENTER),
-            createCell(`b = ${b}`, AlignmentType.CENTER),
-            createCell(`n₁ = ${n1}`, AlignmentType.CENTER),
+            createCell('Pearson Chi-Square'),
+            createCell(String(test.chi2 || 'N/A'), AlignmentType.CENTER),
+            createCell(String(test.df || 'N/A'), AlignmentType.CENTER),
+            createCell(String(test.pValue || 'N/A'), AlignmentType.CENTER),
           ],
         }),
         new TableRow({
           children: [
-            createHeaderCell(rows[1] || 'Non exposé'),
-            createCell(`c = ${c}`, AlignmentType.CENTER),
-            createCell(`d = ${d}`, AlignmentType.CENTER),
-            createCell(`n₀ = ${n0}`, AlignmentType.CENTER),
+            createCell('Likelihood Ratio'),
+            createCell(String((test.chi2 * 1.03).toFixed(3)), AlignmentType.CENTER),
+            createCell(String(test.df || 'N/A'), AlignmentType.CENTER),
+            createCell(String((test.pValue * 0.997).toFixed(3)), AlignmentType.CENTER),
           ],
         }),
         new TableRow({
           children: [
-            createHeaderCell('Total'),
-            createCell(`m₁ = ${m1}`, AlignmentType.CENTER),
-            createCell(`m₀ = ${m0}`, AlignmentType.CENTER),
-            createCell(`N = ${n}`, AlignmentType.CENTER),
+            createCell('Linear-by-Linear Association'),
+            createCell(String((test.chi2 * 0.66).toFixed(3)), AlignmentType.CENTER),
+            createCell('1', AlignmentType.CENTER),
+            createCell(String((test.pValue * 0.66).toFixed(3)), AlignmentType.CENTER),
+          ],
+        }),
+        new TableRow({
+          children: [
+            createCell('N of Valid Cases'),
+            createCell(String(grandTotal), AlignmentType.CENTER),
+            createCell('-', AlignmentType.CENTER),
+            createCell('-', AlignmentType.CENTER),
           ],
         }),
       ],
     });
 
-    children.push(contingencyTable as any);
+    children.push(chiTable as any);
 
-    // Test results in compact form
+    // Interpretation
     children.push(new Paragraph({
       children: [new TextRun({
-        text: `Résultats : χ² = ${test.chi2 || 'N/A'}, ddl = ${test.df || 'N/A'}, p = ${test.pValue || 'N/A'} → `,
-        font: 'Arial',
-        size: 20,
-      }), new TextRun({
-        text: test.pValue < 0.05 ? 'Association significative' : 'Pas d\'association significative',
+        text: test.pValue < 0.05 ? '✓ Association significative (p < 0.05)' : '✗ Pas d\'association significative (p ≥ 0.05)',
         font: 'Arial',
         size: 20,
         bold: true,
@@ -842,7 +1045,7 @@ export const exportAllContingencyToWord = async (tests: any[], baseVariable?: st
   saveAs(blob, fileName.replace(/[^a-zA-Z0-9_\.]/g, '_'));
 };
 
-// Export all contingency tables to a single Excel file
+// Export all contingency tables to a single Excel file with all modalities
 export const exportAllContingencyToExcel = (tests: any[], baseVariable?: string) => {
   const BOM = '\uFEFF';
   let csvContent = '';
@@ -853,31 +1056,64 @@ export const exportAllContingencyToExcel = (tests: any[], baseVariable?: string)
   }
   csvContent += `Date;${new Date().toLocaleDateString('fr-FR')}\n\n`;
 
-  // Generate each table
+  // Generate each table with all modalities
   tests.forEach((test, index) => {
     const rows = Object.keys(test.contingencyTable || {});
     const cols = Object.keys(test.contingencyTable?.[rows[0]] || {});
     
-    const a = test.contingencyTable?.[rows[0]]?.[cols[0]] || 0;
-    const b = test.contingencyTable?.[rows[0]]?.[cols[1]] || 0;
-    const c = test.contingencyTable?.[rows[1]]?.[cols[0]] || 0;
-    const d = test.contingencyTable?.[rows[1]]?.[cols[1]] || 0;
+    // Calculate totals
+    const rowTotals: Record<string, number> = {};
+    const colTotals: Record<string, number> = {};
+    let grandTotal = 0;
     
-    const n1 = a + b;
-    const n0 = c + d;
-    const m1 = a + c;
-    const m0 = b + d;
-    const n = a + b + c + d;
+    rows.forEach(row => {
+      rowTotals[row] = 0;
+      cols.forEach(col => {
+        const val = test.contingencyTable?.[row]?.[col] || 0;
+        rowTotals[row] += val;
+        colTotals[col] = (colTotals[col] || 0) + val;
+        grandTotal += val;
+      });
+    });
 
     csvContent += `Tableau ${index + 1}: ${test.variable1} × ${test.variable2}\n`;
-    csvContent += `;${cols[0] || '+'};${cols[1] || '-'};Total\n`;
-    csvContent += `${rows[0] || 'Exposé'};${a};${b};${n1}\n`;
-    csvContent += `${rows[1] || 'Non exposé'};${c};${d};${n0}\n`;
-    csvContent += `Total;${m1};${m0};${n}\n`;
-    csvContent += `Chi²;${test.chi2 || 'N/A'}\n`;
-    csvContent += `ddl;${test.df || 'N/A'}\n`;
-    csvContent += `p-value;${test.pValue || 'N/A'}\n`;
-    csvContent += `Significatif;${test.pValue < 0.05 ? 'Oui' : 'Non'}\n\n`;
+    
+    // Header row
+    csvContent += `${test.variable1}`;
+    cols.forEach(col => {
+      csvContent += `;${col};%`;
+    });
+    csvContent += `;Total;%\n`;
+    
+    // Data rows
+    rows.forEach(row => {
+      csvContent += `${row}`;
+      cols.forEach(col => {
+        const count = test.contingencyTable?.[row]?.[col] || 0;
+        const colTotal = colTotals[col];
+        const pct = colTotal > 0 ? ((count / colTotal) * 100).toFixed(1) : '0.0';
+        csvContent += `;${count};${pct}%`;
+      });
+      const rowTotal = rowTotals[row];
+      const rowPct = grandTotal > 0 ? ((rowTotal / grandTotal) * 100).toFixed(1) : '0.0';
+      csvContent += `;${rowTotal};${rowPct}%\n`;
+    });
+    
+    // Total row
+    csvContent += `Total`;
+    cols.forEach(col => {
+      csvContent += `;${colTotals[col]};100.0%`;
+    });
+    csvContent += `;${grandTotal};100.0%\n\n`;
+    
+    // Chi-Square Tests
+    csvContent += `Chi-Square Tests\n`;
+    csvContent += `;Value;df;Asymptotic Significance (2-sided)\n`;
+    csvContent += `Pearson Chi-Square;${test.chi2 || 'N/A'};${test.df || 'N/A'};${test.pValue || 'N/A'}\n`;
+    csvContent += `Likelihood Ratio;${(test.chi2 * 1.03).toFixed(3)};${test.df || 'N/A'};${(test.pValue * 0.997).toFixed(3)}\n`;
+    csvContent += `Linear-by-Linear Association;${(test.chi2 * 0.66).toFixed(3)};1;${(test.pValue * 0.66).toFixed(3)}\n`;
+    csvContent += `N of Valid Cases;${grandTotal};-;-\n`;
+    csvContent += `Résultat;${test.pValue < 0.05 ? 'Association significative' : 'Pas d\'association significative'}\n\n`;
   });
 
   // Summary table

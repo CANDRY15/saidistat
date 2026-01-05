@@ -493,73 +493,30 @@ const DataAnalysis = () => {
     ));
   };
 
-  // State for modality reordering
-  const [modalityOrders, setModalityOrders] = useState<Record<string, { rows: string[], cols: string[] }>>({});
-
-  // Function to reorder modalities
-  const moveModality = (tableKey: string, type: 'row' | 'col', fromIndex: number, toIndex: number) => {
-    setModalityOrders(prev => {
-      const current = prev[tableKey] || { rows: [], cols: [] };
-      const arr = type === 'row' ? [...current.rows] : [...current.cols];
-      const [item] = arr.splice(fromIndex, 1);
-      arr.splice(toIndex, 0, item);
-      return {
-        ...prev,
-        [tableKey]: {
-          ...current,
-          [type === 'row' ? 'rows' : 'cols']: arr
-        }
-      };
-    });
-  };
-
-  // Render contingency table in EPI INFO style (like the reference image)
+  // Render contingency table with all modalities (no triangle buttons)
   const renderContingencyTable = (test: any, tableIndex: number) => {
     if (!test.contingencyTable) return null;
     
-    const tableKey = `${test.variable1}_${test.variable2}`;
-    const originalRows = Object.keys(test.contingencyTable);
-    const originalCols = Object.keys(test.contingencyTable[originalRows[0]] || {});
-    
-    // Get ordered modalities (or use original order)
-    const currentOrder = modalityOrders[tableKey];
-    const orderedRows = currentOrder?.rows?.length === originalRows.length 
-      ? currentOrder.rows 
-      : originalRows;
-    const orderedCols = currentOrder?.cols?.length === originalCols.length 
-      ? currentOrder.cols 
-      : originalCols;
-    
-    // Initialize order if needed
-    if (!currentOrder) {
-      setModalityOrders(prev => ({
-        ...prev,
-        [tableKey]: { rows: originalRows, cols: originalCols }
-      }));
-    }
+    const rows = Object.keys(test.contingencyTable);
+    const cols = Object.keys(test.contingencyTable[rows[0]] || {});
     
     // Calculate column totals for percentages
     const colTotals: Record<string, number> = {};
-    orderedCols.forEach(col => {
-      colTotals[col] = orderedRows.reduce((sum, row) => sum + (test.contingencyTable[row]?.[col] || 0), 0);
+    cols.forEach(col => {
+      colTotals[col] = rows.reduce((sum, row) => sum + (test.contingencyTable[row]?.[col] || 0), 0);
     });
-    const grandTotal = orderedRows.reduce((sum, row) => 
-      orderedCols.reduce((s, col) => s + (test.contingencyTable[row]?.[col] || 0), sum), 0);
+    const grandTotal = rows.reduce((sum, row) => 
+      cols.reduce((s, col) => s + (test.contingencyTable[row]?.[col] || 0), sum), 0);
     
     // Calculate row totals
     const rowTotals: Record<string, number> = {};
-    orderedRows.forEach(row => {
-      rowTotals[row] = orderedCols.reduce((sum, col) => sum + (test.contingencyTable[row]?.[col] || 0), 0);
+    rows.forEach(row => {
+      rowTotals[row] = cols.reduce((sum, col) => sum + (test.contingencyTable[row]?.[col] || 0), 0);
     });
     
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h4 className="font-semibold">Tableau de contingence</h4>
-          <div className="text-xs text-muted-foreground">
-            Cliquez sur ▲/▼ pour réorganiser les modalités
-          </div>
-        </div>
+        <h4 className="font-semibold">Tableau croisé : {test.variable1} × {test.variable2}</h4>
         
         <div className="overflow-x-auto">
           <Table className="border">
@@ -569,7 +526,7 @@ const DataAnalysis = () => {
                 <TableHead rowSpan={2} className="border text-center font-bold align-middle">
                   {test.variable1}
                 </TableHead>
-                <TableHead colSpan={orderedCols.length * 2} className="border text-center font-bold">
+                <TableHead colSpan={cols.length * 2} className="border text-center font-bold">
                   {test.variable2}
                 </TableHead>
                 <TableHead colSpan={2} rowSpan={2} className="border text-center font-bold bg-primary/10 align-middle">
@@ -578,30 +535,10 @@ const DataAnalysis = () => {
               </TableRow>
               {/* Second header row: each modality with N and % */}
               <TableRow className="bg-muted/30">
-                {orderedCols.map((col, colIdx) => (
+                {cols.map((col) => (
                   <>
                     <TableHead key={`${col}-n`} className="border text-center font-medium min-w-[60px]">
-                      <div className="flex items-center justify-center gap-1">
-                        {colIdx > 0 && (
-                          <button
-                            onClick={() => moveModality(tableKey, 'col', colIdx, colIdx - 1)}
-                            className="text-xs hover:text-primary p-0.5"
-                            title="Déplacer à gauche"
-                          >
-                            ◄
-                          </button>
-                        )}
-                        <span className="font-bold">{col}</span>
-                        {colIdx < orderedCols.length - 1 && (
-                          <button
-                            onClick={() => moveModality(tableKey, 'col', colIdx, colIdx + 1)}
-                            className="text-xs hover:text-primary p-0.5"
-                            title="Déplacer à droite"
-                          >
-                            ►
-                          </button>
-                        )}
-                      </div>
+                      <span className="font-bold">{col}</span>
                       <div className="text-xs text-muted-foreground">N</div>
                     </TableHead>
                     <TableHead key={`${col}-pct`} className="border text-center font-medium min-w-[60px]">
@@ -612,36 +549,16 @@ const DataAnalysis = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orderedRows.map((row, rowIdx) => {
+              {rows.map((row) => {
                 const rowTotal = rowTotals[row];
                 const rowPctOfTotal = grandTotal > 0 ? ((rowTotal / grandTotal) * 100).toFixed(1) : '0.0';
                 
                 return (
                   <TableRow key={row}>
                     <TableCell className="border font-medium bg-muted/20">
-                      <div className="flex items-center gap-1">
-                        {rowIdx > 0 && (
-                          <button
-                            onClick={() => moveModality(tableKey, 'row', rowIdx, rowIdx - 1)}
-                            className="text-xs hover:text-primary p-0.5"
-                            title="Déplacer vers le haut"
-                          >
-                            ▲
-                          </button>
-                        )}
-                        {rowIdx < orderedRows.length - 1 && (
-                          <button
-                            onClick={() => moveModality(tableKey, 'row', rowIdx, rowIdx + 1)}
-                            className="text-xs hover:text-primary p-0.5"
-                            title="Déplacer vers le bas"
-                          >
-                            ▼
-                          </button>
-                        )}
-                        <span className="font-bold">{row}</span>
-                      </div>
+                      <span className="font-bold">{row}</span>
                     </TableCell>
-                    {orderedCols.map(col => {
+                    {cols.map(col => {
                       const count = test.contingencyTable[row]?.[col] || 0;
                       const colTotal = colTotals[col];
                       const percentage = colTotal > 0 ? ((count / colTotal) * 100).toFixed(1) : '0.0';
@@ -670,7 +587,7 @@ const DataAnalysis = () => {
               {/* Total row */}
               <TableRow className="bg-primary/10 font-bold">
                 <TableCell className="border font-bold">Total</TableCell>
-                {orderedCols.map(col => (
+                {cols.map(col => (
                   <>
                     <TableCell key={`total-${col}-n`} className="border text-center">
                       {colTotals[col]}
