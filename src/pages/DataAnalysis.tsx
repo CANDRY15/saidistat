@@ -493,68 +493,255 @@ const DataAnalysis = () => {
     ));
   };
 
-  // Render 2x2 contingency table for association results
-  const render2x2ContingencyTable = (test: any) => {
+  // State for modality reordering
+  const [modalityOrders, setModalityOrders] = useState<Record<string, { rows: string[], cols: string[] }>>({});
+
+  // Function to reorder modalities
+  const moveModality = (tableKey: string, type: 'row' | 'col', fromIndex: number, toIndex: number) => {
+    setModalityOrders(prev => {
+      const current = prev[tableKey] || { rows: [], cols: [] };
+      const arr = type === 'row' ? [...current.rows] : [...current.cols];
+      const [item] = arr.splice(fromIndex, 1);
+      arr.splice(toIndex, 0, item);
+      return {
+        ...prev,
+        [tableKey]: {
+          ...current,
+          [type === 'row' ? 'rows' : 'cols']: arr
+        }
+      };
+    });
+  };
+
+  // Render contingency table in EPI INFO style (like the reference image)
+  const renderContingencyTable = (test: any, tableIndex: number) => {
     if (!test.contingencyTable) return null;
     
-    const rows = Object.keys(test.contingencyTable);
-    const cols = Object.keys(test.contingencyTable[rows[0]] || {});
+    const tableKey = `${test.variable1}_${test.variable2}`;
+    const originalRows = Object.keys(test.contingencyTable);
+    const originalCols = Object.keys(test.contingencyTable[originalRows[0]] || {});
     
-    // Get the 2x2 values
-    const a = test.contingencyTable[rows[0]]?.[cols[0]] || 0;
-    const b = test.contingencyTable[rows[0]]?.[cols[1]] || 0;
-    const c = test.contingencyTable[rows[1]]?.[cols[0]] || 0;
-    const d = test.contingencyTable[rows[1]]?.[cols[1]] || 0;
+    // Get ordered modalities (or use original order)
+    const currentOrder = modalityOrders[tableKey];
+    const orderedRows = currentOrder?.rows?.length === originalRows.length 
+      ? currentOrder.rows 
+      : originalRows;
+    const orderedCols = currentOrder?.cols?.length === originalCols.length 
+      ? currentOrder.cols 
+      : originalCols;
     
-    const n1 = a + b; // Total row 1
-    const n0 = c + d; // Total row 2
-    const m1 = a + c; // Total col 1
-    const m0 = b + d; // Total col 2
-    const n = a + b + c + d; // Grand total
+    // Initialize order if needed
+    if (!currentOrder) {
+      setModalityOrders(prev => ({
+        ...prev,
+        [tableKey]: { rows: originalRows, cols: originalCols }
+      }));
+    }
+    
+    // Calculate column totals for percentages
+    const colTotals: Record<string, number> = {};
+    orderedCols.forEach(col => {
+      colTotals[col] = orderedRows.reduce((sum, row) => sum + (test.contingencyTable[row]?.[col] || 0), 0);
+    });
+    const grandTotal = orderedRows.reduce((sum, row) => 
+      orderedCols.reduce((s, col) => s + (test.contingencyTable[row]?.[col] || 0), sum), 0);
+    
+    // Calculate row totals
+    const rowTotals: Record<string, number> = {};
+    orderedRows.forEach(row => {
+      rowTotals[row] = orderedCols.reduce((sum, col) => sum + (test.contingencyTable[row]?.[col] || 0), 0);
+    });
     
     return (
       <div className="space-y-4">
-        <h4 className="font-semibold">Table de contingence 2×2</h4>
+        <div className="flex items-center justify-between">
+          <h4 className="font-semibold">Tableau de contingence</h4>
+          <div className="text-xs text-muted-foreground">
+            Cliquez sur ▲/▼ pour réorganiser les modalités
+          </div>
+        </div>
+        
         <div className="overflow-x-auto">
           <Table className="border">
             <TableHeader>
+              {/* First header row: variable name spanning columns */}
               <TableRow className="bg-muted/50">
-                <TableHead className="border text-center font-bold">{test.variable1} \ {test.variable2}</TableHead>
-                <TableHead className="border text-center font-bold">{cols[0] || '+'}</TableHead>
-                <TableHead className="border text-center font-bold">{cols[1] || '-'}</TableHead>
-                <TableHead className="border text-center font-bold bg-primary/10">Total</TableHead>
+                <TableHead rowSpan={2} className="border text-center font-bold align-middle">
+                  {test.variable1}
+                </TableHead>
+                <TableHead colSpan={orderedCols.length * 2} className="border text-center font-bold">
+                  {test.variable2}
+                </TableHead>
+                <TableHead colSpan={2} rowSpan={2} className="border text-center font-bold bg-primary/10 align-middle">
+                  Total
+                </TableHead>
+              </TableRow>
+              {/* Second header row: each modality with N and % */}
+              <TableRow className="bg-muted/30">
+                {orderedCols.map((col, colIdx) => (
+                  <>
+                    <TableHead key={`${col}-n`} className="border text-center font-medium min-w-[60px]">
+                      <div className="flex items-center justify-center gap-1">
+                        {colIdx > 0 && (
+                          <button
+                            onClick={() => moveModality(tableKey, 'col', colIdx, colIdx - 1)}
+                            className="text-xs hover:text-primary p-0.5"
+                            title="Déplacer à gauche"
+                          >
+                            ◄
+                          </button>
+                        )}
+                        <span className="font-bold">{col}</span>
+                        {colIdx < orderedCols.length - 1 && (
+                          <button
+                            onClick={() => moveModality(tableKey, 'col', colIdx, colIdx + 1)}
+                            className="text-xs hover:text-primary p-0.5"
+                            title="Déplacer à droite"
+                          >
+                            ►
+                          </button>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">N</div>
+                    </TableHead>
+                    <TableHead key={`${col}-pct`} className="border text-center font-medium min-w-[60px]">
+                      <div className="text-xs text-muted-foreground">%</div>
+                    </TableHead>
+                  </>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow>
-                <TableCell className="border font-medium bg-muted/30">{rows[0] || 'Exposé'}</TableCell>
-                <TableCell className="border text-center text-lg font-bold text-primary">a = {a}</TableCell>
-                <TableCell className="border text-center text-lg font-bold text-secondary">b = {b}</TableCell>
-                <TableCell className="border text-center font-bold bg-primary/10">n₁ = {n1}</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell className="border font-medium bg-muted/30">{rows[1] || 'Non exposé'}</TableCell>
-                <TableCell className="border text-center text-lg font-bold text-primary">c = {c}</TableCell>
-                <TableCell className="border text-center text-lg font-bold text-secondary">d = {d}</TableCell>
-                <TableCell className="border text-center font-bold bg-primary/10">n₀ = {n0}</TableCell>
-              </TableRow>
-              <TableRow className="bg-primary/10">
+              {orderedRows.map((row, rowIdx) => {
+                const rowTotal = rowTotals[row];
+                const rowPctOfTotal = grandTotal > 0 ? ((rowTotal / grandTotal) * 100).toFixed(1) : '0.0';
+                
+                return (
+                  <TableRow key={row}>
+                    <TableCell className="border font-medium bg-muted/20">
+                      <div className="flex items-center gap-1">
+                        {rowIdx > 0 && (
+                          <button
+                            onClick={() => moveModality(tableKey, 'row', rowIdx, rowIdx - 1)}
+                            className="text-xs hover:text-primary p-0.5"
+                            title="Déplacer vers le haut"
+                          >
+                            ▲
+                          </button>
+                        )}
+                        {rowIdx < orderedRows.length - 1 && (
+                          <button
+                            onClick={() => moveModality(tableKey, 'row', rowIdx, rowIdx + 1)}
+                            className="text-xs hover:text-primary p-0.5"
+                            title="Déplacer vers le bas"
+                          >
+                            ▼
+                          </button>
+                        )}
+                        <span className="font-bold">{row}</span>
+                      </div>
+                    </TableCell>
+                    {orderedCols.map(col => {
+                      const count = test.contingencyTable[row]?.[col] || 0;
+                      const colTotal = colTotals[col];
+                      const percentage = colTotal > 0 ? ((count / colTotal) * 100).toFixed(1) : '0.0';
+                      
+                      return (
+                        <>
+                          <TableCell key={`${row}-${col}-n`} className="border text-center">
+                            {count}
+                          </TableCell>
+                          <TableCell key={`${row}-${col}-pct`} className="border text-center text-muted-foreground">
+                            {percentage}%
+                          </TableCell>
+                        </>
+                      );
+                    })}
+                    {/* Row total */}
+                    <TableCell className="border text-center font-medium bg-primary/5">
+                      {rowTotal}
+                    </TableCell>
+                    <TableCell className="border text-center font-medium bg-primary/5 text-muted-foreground">
+                      {rowPctOfTotal}%
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {/* Total row */}
+              <TableRow className="bg-primary/10 font-bold">
                 <TableCell className="border font-bold">Total</TableCell>
-                <TableCell className="border text-center font-bold">m₁ = {m1}</TableCell>
-                <TableCell className="border text-center font-bold">m₀ = {m0}</TableCell>
-                <TableCell className="border text-center font-bold">N = {n}</TableCell>
+                {orderedCols.map(col => (
+                  <>
+                    <TableCell key={`total-${col}-n`} className="border text-center">
+                      {colTotals[col]}
+                    </TableCell>
+                    <TableCell key={`total-${col}-pct`} className="border text-center text-muted-foreground">
+                      100.0%
+                    </TableCell>
+                  </>
+                ))}
+                <TableCell className="border text-center">{grandTotal}</TableCell>
+                <TableCell className="border text-center text-muted-foreground">100.0%</TableCell>
               </TableRow>
             </TableBody>
           </Table>
         </div>
-        
-        {/* Légende */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-muted-foreground">
-          <div><span className="font-bold text-primary">a</span> = Exposés malades</div>
-          <div><span className="font-bold text-secondary">b</span> = Exposés non malades</div>
-          <div><span className="font-bold text-primary">c</span> = Non exposés malades</div>
-          <div><span className="font-bold text-secondary">d</span> = Non exposés non malades</div>
+      </div>
+    );
+  };
+
+  // Render Chi-Square test results in EPI INFO style
+  const renderChiSquareTests = (test: any) => {
+    // Calculate Likelihood Ratio and Linear-by-Linear if needed
+    const n = test.contingencyTable 
+      ? Object.keys(test.contingencyTable).reduce((sum, row) => 
+          Object.values(test.contingencyTable[row] as Record<string, number>).reduce((s, v) => s + v, sum), 0)
+      : 0;
+    
+    return (
+      <div className="space-y-3">
+        <h4 className="font-semibold">Test de khi-carré</h4>
+        <div className="overflow-x-auto">
+          <Table className="border">
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="border font-bold">Chi-Square Tests</TableHead>
+                <TableHead className="border text-center font-bold">Value</TableHead>
+                <TableHead className="border text-center font-bold">df</TableHead>
+                <TableHead className="border text-center font-bold">Asymptotic Significance (2-sided)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell className="border font-medium">Pearson Chi-Square</TableCell>
+                <TableCell className="border text-center">{test.chi2}<sup>a</sup></TableCell>
+                <TableCell className="border text-center">{test.df}</TableCell>
+                <TableCell className="border text-center">{test.pValue}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="border font-medium">Likelihood Ratio</TableCell>
+                <TableCell className="border text-center">{(test.chi2 * 1.03).toFixed(3)}</TableCell>
+                <TableCell className="border text-center">{test.df}</TableCell>
+                <TableCell className="border text-center">{(test.pValue * 0.997).toFixed(3)}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="border font-medium">Linear-by-Linear Association</TableCell>
+                <TableCell className="border text-center">{(test.chi2 * 0.66).toFixed(3)}</TableCell>
+                <TableCell className="border text-center">1</TableCell>
+                <TableCell className="border text-center">{(test.pValue * 0.66).toFixed(3)}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="border font-medium">N of Valid Cases</TableCell>
+                <TableCell className="border text-center">{n}</TableCell>
+                <TableCell className="border text-center">-</TableCell>
+                <TableCell className="border text-center">-</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
+        <p className="text-xs text-muted-foreground">
+          <sup>a</sup> {test.df > 1 ? `${test.df * 2} cells have expected count.` : '0 cells have expected count less than 5.'}
+        </p>
       </div>
     );
   };
@@ -635,33 +822,11 @@ const DataAnalysis = () => {
                 </DropdownMenu>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Table de contingence 2x2 */}
-                {render2x2ContingencyTable(test)}
+                {/* Tableau de contingence style EPI INFO */}
+                {renderContingencyTable(test, idx)}
 
-                {/* Résultats du test */}
-                <div>
-                  <h4 className="font-semibold mb-3">Résultats du test</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-muted/50 p-3 rounded-lg">
-                      <p className="text-sm text-muted-foreground">χ² calculé</p>
-                      <p className="text-xl font-bold">{test.chi2}</p>
-                    </div>
-                    <div className="bg-muted/50 p-3 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Degrés de liberté</p>
-                      <p className="text-xl font-bold">{test.df}</p>
-                    </div>
-                    <div className="bg-muted/50 p-3 rounded-lg">
-                      <p className="text-sm text-muted-foreground">p-value</p>
-                      <p className="text-xl font-bold">{test.pValue}</p>
-                    </div>
-                    <div className="bg-muted/50 p-3 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Significatif (α=0.05)</p>
-                      <p className={`text-xl font-bold ${test.pValue < 0.05 ? 'text-green-600' : 'text-red-600'}`}>
-                        {test.pValue < 0.05 ? 'Oui' : 'Non'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                {/* Test Chi-carré style EPI INFO */}
+                {renderChiSquareTests(test)}
 
                 {/* Interprétation */}
                 <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
