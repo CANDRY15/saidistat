@@ -9,10 +9,11 @@ interface Chi2Result {
   variable1: string;
   variable2: string;
   chi2: number;
+  df: number;
   degreesOfFreedom: number;
   pValue: number;
   significant: boolean;
-  contingencyTable: any;
+  contingencyTable: Record<string, Record<string, number>>;
 }
 
 interface CorrelationResult {
@@ -82,18 +83,12 @@ function calculateChi2(data: any[], var1: string, var2: string): Chi2Result {
   return {
     variable1: var1,
     variable2: var2,
-    chi2: Number(chi2.toFixed(4)),
+    chi2: Number(chi2.toFixed(3)),
+    df: df,
     degreesOfFreedom: df,
-    pValue: Number(pValue.toFixed(4)),
+    pValue: Number(pValue.toFixed(3)),
     significant: pValue < 0.05,
-    contingencyTable: {
-      rows,
-      cols,
-      data: contingencyMap,
-      rowTotals,
-      colTotals,
-      grandTotal
-    }
+    contingencyTable: contingencyMap
   };
 }
 
