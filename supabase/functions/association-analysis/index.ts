@@ -188,22 +188,38 @@ function calculateChi2(data: any[], var1: string, var2: string): Chi2Result {
   const var1Values = new Set<string>();
   const var2Values = new Set<string>();
   
+  // First pass: collect all unique values for both variables
   data.forEach(row => {
-    const val1 = String(row[var1] || '');
-    const val2 = String(row[var2] || '');
+    const val1 = String(row[var1] || '').trim();
+    const val2 = String(row[var2] || '').trim();
     
-    if (val1 && val2) {
+    if (val1 && val2 && val1 !== 'undefined' && val2 !== 'undefined' && 
+        val1 !== 'null' && val2 !== 'null' && val1 !== '' && val2 !== '') {
       var1Values.add(val1);
       var2Values.add(val2);
-      
-      if (!contingencyMap[val1]) contingencyMap[val1] = {};
-      contingencyMap[val1][val2] = (contingencyMap[val1][val2] || 0) + 1;
     }
   });
   
-  // Calculate chi-squared statistic
-  const rows = Array.from(var1Values);
-  const cols = Array.from(var2Values);
+  const rows = Array.from(var1Values).sort();
+  const cols = Array.from(var2Values).sort();
+  
+  // Initialize the contingency table with zeros for ALL combinations
+  rows.forEach(r => {
+    contingencyMap[r] = {};
+    cols.forEach(c => {
+      contingencyMap[r][c] = 0;
+    });
+  });
+  
+  // Second pass: count occurrences
+  data.forEach(row => {
+    const val1 = String(row[var1] || '').trim();
+    const val2 = String(row[var2] || '').trim();
+    
+    if (val1 && val2 && var1Values.has(val1) && var2Values.has(val2)) {
+      contingencyMap[val1][val2] = (contingencyMap[val1][val2] || 0) + 1;
+    }
+  });
   
   // Calculate row and column totals
   const rowTotals: Record<string, number> = {};
