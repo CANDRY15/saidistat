@@ -5,6 +5,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface RiskMeasures {
+  oddsRatio: number | null;
+  oddsRatioCI: [number, number] | null;
+  relativeRisk: number | null;
+  relativeRiskCI: [number, number] | null;
+  is2x2: boolean;
+}
+
 interface Chi2Result {
   variable1: string;
   variable2: string;
@@ -14,6 +22,11 @@ interface Chi2Result {
   pValue: number;
   significant: boolean;
   contingencyTable: Record<string, Record<string, number>>;
+  riskMeasures?: RiskMeasures;
+  likelihoodRatio?: number;
+  likelihoodRatioPValue?: number;
+  linearByLinear?: number;
+  linearByLinearPValue?: number;
 }
 
 interface CorrelationResult {
@@ -23,6 +36,149 @@ interface CorrelationResult {
   pValue: number;
   type: 'pearson' | 'spearman';
   significant: boolean;
+}
+
+// Calculate Odds Ratio and Relative Risk for 2x2 tables
+function calculateRiskMeasures(contingencyTable: Record<string, Record<string, number>>, rows: string[], cols: string[]): RiskMeasures {
+  const is2x2 = rows.length === 2 && cols.length === 2;
+  
+  if (!is2x2) {
+    return {
+      oddsRatio: null,
+      oddsRatioCI: null,
+      relativeRisk: null,
+      relativeRiskCI: null,
+      is2x2: false
+    };
+  }
+  
+  // For 2x2 table:
+  //           | Col1 (Disease+) | Col2 (Disease-) |
+  // Row1 (Exp+) |       a         |       b         |
+  // Row2 (Exp-) |       c         |       d         |
+  
+  const a = contingencyTable[rows[0]]?.[cols[0]] || 0;
+  const b = contingencyTable[rows[0]]?.[cols[1]] || 0;
+  const c = contingencyTable[rows[1]]?.[cols[0]] || 0;
+  const d = contingencyTable[rows[1]]?.[cols[1]] || 0;
+  
+  // Odds Ratio = (a*d) / (b*c)
+  let oddsRatio: number | null = null;
+  let oddsRatioCI: [number, number] | null = null;
+  
+  if (b * c > 0) {
+    oddsRatio = (a * d) / (b * c);
+    
+    // 95% CI for OR using Woolf's method: ln(OR) ± 1.96 * sqrt(1/a + 1/b + 1/c + 1/d)
+    if (a > 0 && b > 0 && c > 0 && d > 0) {
+      const lnOR = Math.log(oddsRatio);
+      const se = Math.sqrt(1/a + 1/b + 1/c + 1/d);
+      const lowerLn = lnOR - 1.96 * se;
+      const upperLn = lnOR + 1.96 * se;
+      oddsRatioCI = [Number(Math.exp(lowerLn).toFixed(3)), Number(Math.exp(upperLn).toFixed(3))];
+    }
+    
+    oddsRatio = Number(oddsRatio.toFixed(3));
+  }
+  
+  // Relative Risk = [a/(a+b)] / [c/(c+d)]
+  let relativeRisk: number | null = null;
+  let relativeRiskCI: [number, number] | null = null;
+  
+  const row1Total = a + b;
+  const row2Total = c + d;
+  
+  if (row1Total > 0 && row2Total > 0 && c > 0) {
+    const p1 = a / row1Total; // Risk in exposed
+    const p2 = c / row2Total; // Risk in unexposed
+    
+    if (p2 > 0) {
+      relativeRisk = p1 / p2;
+      
+      // 95% CI for RR using log method
+      if (a > 0) {
+        const lnRR = Math.log(relativeRisk);
+        const se = Math.sqrt((1 - p1) / (a) + (1 - p2) / (c));
+        const lowerLn = lnRR - 1.96 * se;
+        const upperLn = lnRR + 1.96 * se;
+        relativeRiskCI = [Number(Math.exp(lowerLn).toFixed(3)), Number(Math.exp(upperLn).toFixed(3))];
+      }
+      
+      relativeRisk = Number(relativeRisk.toFixed(3));
+    }
+  }
+  
+  return {
+    oddsRatio,
+    oddsRatioCI,
+    relativeRisk,
+    relativeRiskCI,
+    is2x2
+  };
+}
+
+// Calculate Likelihood Ratio for chi-squared
+function calculateLikelihoodRatio(contingencyTable: Record<string, Record<string, number>>, rowTotals: Record<string, number>, colTotals: Record<string, number>, grandTotal: number, rows: string[], cols: string[]): number {
+  let G2 = 0;
+  
+  rows.forEach(r => {
+    cols.forEach(c => {
+      const observed = contingencyTable[r]?.[c] || 0;
+      const expected = (rowTotals[r] * colTotals[c]) / grandTotal;
+      
+      if (observed > 0 && expected > 0) {
+        G2 += 2 * observed * Math.log(observed / expected);
+      }
+    });
+  });
+  
+  return G2;
+}
+
+// Calculate Linear-by-Linear Association
+function calculateLinearByLinear(contingencyTable: Record<string, Record<string, number>>, rows: string[], cols: string[], grandTotal: number): number {
+  // Assign numeric scores to rows and columns (1, 2, 3, ...)
+  const rowScores: Record<string, number> = {};
+  const colScores: Record<string, number> = {};
+  
+  rows.forEach((r, i) => { rowScores[r] = i + 1; });
+  cols.forEach((c, i) => { colScores[c] = i + 1; });
+  
+  // Calculate means
+  let sumRowScore = 0;
+  let sumColScore = 0;
+  let sumRowScoreSq = 0;
+  let sumColScoreSq = 0;
+  let sumProduct = 0;
+  
+  rows.forEach(r => {
+    cols.forEach(c => {
+      const count = contingencyTable[r]?.[c] || 0;
+      const rs = rowScores[r];
+      const cs = colScores[c];
+      
+      sumRowScore += count * rs;
+      sumColScore += count * cs;
+      sumRowScoreSq += count * rs * rs;
+      sumColScoreSq += count * cs * cs;
+      sumProduct += count * rs * cs;
+    });
+  });
+  
+  const meanRow = sumRowScore / grandTotal;
+  const meanCol = sumColScore / grandTotal;
+  
+  const varRow = (sumRowScoreSq / grandTotal) - (meanRow * meanRow);
+  const varCol = (sumColScoreSq / grandTotal) - (meanCol * meanCol);
+  
+  const covariance = (sumProduct / grandTotal) - (meanRow * meanCol);
+  
+  if (varRow <= 0 || varCol <= 0) return 0;
+  
+  const r = covariance / Math.sqrt(varRow * varCol);
+  const M2 = (grandTotal - 1) * r * r;
+  
+  return M2;
 }
 
 // Chi-squared test
@@ -80,6 +236,13 @@ function calculateChi2(data: any[], var1: string, var2: string): Chi2Result {
   const df = (rows.length - 1) * (cols.length - 1);
   const pValue = chiSquaredPValue(chi2, df);
   
+  // Calculate additional statistics
+  const riskMeasures = calculateRiskMeasures(contingencyMap, rows, cols);
+  const likelihoodRatio = calculateLikelihoodRatio(contingencyMap, rowTotals, colTotals, grandTotal, rows, cols);
+  const likelihoodRatioPValue = chiSquaredPValue(likelihoodRatio, df);
+  const linearByLinear = calculateLinearByLinear(contingencyMap, rows, cols, grandTotal);
+  const linearByLinearPValue = chiSquaredPValue(linearByLinear, 1);
+  
   return {
     variable1: var1,
     variable2: var2,
@@ -88,7 +251,12 @@ function calculateChi2(data: any[], var1: string, var2: string): Chi2Result {
     degreesOfFreedom: df,
     pValue: Number(pValue.toFixed(3)),
     significant: pValue < 0.05,
-    contingencyTable: contingencyMap
+    contingencyTable: contingencyMap,
+    riskMeasures,
+    likelihoodRatio: Number(likelihoodRatio.toFixed(3)),
+    likelihoodRatioPValue: Number(likelihoodRatioPValue.toFixed(3)),
+    linearByLinear: Number(linearByLinear.toFixed(3)),
+    linearByLinearPValue: Number(linearByLinearPValue.toFixed(3))
   };
 }
 
