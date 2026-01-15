@@ -634,17 +634,17 @@ export const exportContingencyToWord = async (test: any) => {
       new TableRow({
         children: [
           createCell('Likelihood Ratio'),
-          createCell(String((test.chi2 * 1.03).toFixed(3)), AlignmentType.CENTER),
+          createCell(String(test.likelihoodRatio || (test.chi2 * 1.03).toFixed(3)), AlignmentType.CENTER),
           createCell(String(test.df || 'N/A'), AlignmentType.CENTER),
-          createCell(String((test.pValue * 0.997).toFixed(3)), AlignmentType.CENTER),
+          createCell(String(test.likelihoodRatioPValue || (test.pValue * 0.997).toFixed(3)), AlignmentType.CENTER),
         ],
       }),
       new TableRow({
         children: [
           createCell('Linear-by-Linear Association'),
-          createCell(String((test.chi2 * 0.66).toFixed(3)), AlignmentType.CENTER),
+          createCell(String(test.linearByLinear || (test.chi2 * 0.66).toFixed(3)), AlignmentType.CENTER),
           createCell('1', AlignmentType.CENTER),
-          createCell(String((test.pValue * 0.66).toFixed(3)), AlignmentType.CENTER),
+          createCell(String(test.linearByLinearPValue || (test.pValue * 0.66).toFixed(3)), AlignmentType.CENTER),
         ],
       }),
       new TableRow({
@@ -659,6 +659,89 @@ export const exportContingencyToWord = async (test: any) => {
   });
 
   children.push(chiTable as any);
+
+  // Risk Measures (OR/RR) for 2x2 tables
+  if (test.riskMeasures && test.riskMeasures.is2x2) {
+    children.push(new Paragraph({
+      children: [new TextRun({
+        text: 'Risk Estimate',
+        bold: true,
+        font: 'Arial',
+        size: 24,
+      })],
+      spacing: { before: 300, after: 100 },
+    }));
+
+    const riskTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new TableRow({
+          children: [
+            createHeaderCell('Mesure'),
+            createHeaderCell('Value'),
+            createHeaderCell('95% Confidence Interval'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            createCell('Odds Ratio (OR)'),
+            createCell(test.riskMeasures.oddsRatio !== null ? String(test.riskMeasures.oddsRatio) : 'N/A', AlignmentType.CENTER),
+            createCell(test.riskMeasures.oddsRatioCI ? `[${test.riskMeasures.oddsRatioCI[0]} - ${test.riskMeasures.oddsRatioCI[1]}]` : 'N/A', AlignmentType.CENTER),
+          ],
+        }),
+        new TableRow({
+          children: [
+            createCell('Risque Relatif (RR)'),
+            createCell(test.riskMeasures.relativeRisk !== null ? String(test.riskMeasures.relativeRisk) : 'N/A', AlignmentType.CENTER),
+            createCell(test.riskMeasures.relativeRiskCI ? `[${test.riskMeasures.relativeRiskCI[0]} - ${test.riskMeasures.relativeRiskCI[1]}]` : 'N/A', AlignmentType.CENTER),
+          ],
+        }),
+      ],
+    });
+
+    children.push(riskTable as any);
+
+    // Interpretation of OR/RR
+    if (test.riskMeasures.oddsRatio !== null) {
+      const or = test.riskMeasures.oddsRatio;
+      const orCI = test.riskMeasures.oddsRatioCI;
+      let orInterpret = `OR = ${or} : `;
+      if (or > 1) {
+        orInterpret += `Le facteur augmente les odds de ${((or - 1) * 100).toFixed(1)}%.`;
+      } else if (or < 1) {
+        orInterpret += `Le facteur réduit les odds de ${((1 - or) * 100).toFixed(1)}%.`;
+      } else {
+        orInterpret += `Pas d'association.`;
+      }
+      if (orCI) {
+        orInterpret += orCI[0] > 1 || orCI[1] < 1 
+          ? ' L\'IC 95% ne contient pas 1 → association significative.'
+          : ' L\'IC 95% contient 1 → non significatif.';
+      }
+      
+      children.push(new Paragraph({
+        children: [new TextRun({ text: orInterpret, font: 'Arial', size: 20 })],
+        spacing: { before: 100 },
+      }));
+    }
+
+    if (test.riskMeasures.relativeRisk !== null) {
+      const rr = test.riskMeasures.relativeRisk;
+      let rrInterpret = `RR = ${rr} : `;
+      if (rr > 1) {
+        rrInterpret += `Le risque est ${rr.toFixed(2)} fois plus élevé chez les exposés.`;
+      } else if (rr < 1) {
+        rrInterpret += `Le risque est ${(1 / rr).toFixed(2)} fois plus faible chez les exposés.`;
+      } else {
+        rrInterpret += `Risques égaux.`;
+      }
+      
+      children.push(new Paragraph({
+        children: [new TextRun({ text: rrInterpret, font: 'Arial', size: 20 })],
+        spacing: { before: 50 },
+      }));
+    }
+  }
 
   // Interpretation
   children.push(new Paragraph({
@@ -749,9 +832,20 @@ export const exportContingencyToExcel = (test: any) => {
   csvContent += `Chi-Square Tests\n`;
   csvContent += `;Value;df;Asymptotic Significance (2-sided)\n`;
   csvContent += `Pearson Chi-Square;${test.chi2 || 'N/A'};${test.df || 'N/A'};${test.pValue || 'N/A'}\n`;
-  csvContent += `Likelihood Ratio;${(test.chi2 * 1.03).toFixed(3)};${test.df || 'N/A'};${(test.pValue * 0.997).toFixed(3)}\n`;
-  csvContent += `Linear-by-Linear Association;${(test.chi2 * 0.66).toFixed(3)};1;${(test.pValue * 0.66).toFixed(3)}\n`;
+  csvContent += `Likelihood Ratio;${test.likelihoodRatio || (test.chi2 * 1.03).toFixed(3)};${test.df || 'N/A'};${test.likelihoodRatioPValue || (test.pValue * 0.997).toFixed(3)}\n`;
+  csvContent += `Linear-by-Linear Association;${test.linearByLinear || (test.chi2 * 0.66).toFixed(3)};1;${test.linearByLinearPValue || (test.pValue * 0.66).toFixed(3)}\n`;
   csvContent += `N of Valid Cases;${grandTotal};-;-\n\n`;
+  
+  // Risk Measures for 2x2 tables
+  if (test.riskMeasures && test.riskMeasures.is2x2) {
+    csvContent += `Risk Estimate\n`;
+    csvContent += `;Value;95% Confidence Interval\n`;
+    const orCI = test.riskMeasures.oddsRatioCI ? `[${test.riskMeasures.oddsRatioCI[0]} - ${test.riskMeasures.oddsRatioCI[1]}]` : 'N/A';
+    const rrCI = test.riskMeasures.relativeRiskCI ? `[${test.riskMeasures.relativeRiskCI[0]} - ${test.riskMeasures.relativeRiskCI[1]}]` : 'N/A';
+    csvContent += `Odds Ratio (OR);${test.riskMeasures.oddsRatio !== null ? test.riskMeasures.oddsRatio : 'N/A'};${orCI}\n`;
+    csvContent += `Risque Relatif (RR);${test.riskMeasures.relativeRisk !== null ? test.riskMeasures.relativeRisk : 'N/A'};${rrCI}\n\n`;
+  }
+  
   csvContent += `Résultat;${test.pValue < 0.05 ? 'Association significative (p < 0.05)' : 'Pas d\'association significative (p ≥ 0.05)'}\n`;
 
   const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' });
@@ -937,17 +1031,17 @@ export const exportAllContingencyToWord = async (tests: any[], baseVariable?: st
         new TableRow({
           children: [
             createCell('Likelihood Ratio'),
-            createCell(String((test.chi2 * 1.03).toFixed(3)), AlignmentType.CENTER),
+            createCell(String(test.likelihoodRatio || (test.chi2 * 1.03).toFixed(3)), AlignmentType.CENTER),
             createCell(String(test.df || 'N/A'), AlignmentType.CENTER),
-            createCell(String((test.pValue * 0.997).toFixed(3)), AlignmentType.CENTER),
+            createCell(String(test.likelihoodRatioPValue || (test.pValue * 0.997).toFixed(3)), AlignmentType.CENTER),
           ],
         }),
         new TableRow({
           children: [
             createCell('Linear-by-Linear Association'),
-            createCell(String((test.chi2 * 0.66).toFixed(3)), AlignmentType.CENTER),
+            createCell(String(test.linearByLinear || (test.chi2 * 0.66).toFixed(3)), AlignmentType.CENTER),
             createCell('1', AlignmentType.CENTER),
-            createCell(String((test.pValue * 0.66).toFixed(3)), AlignmentType.CENTER),
+            createCell(String(test.linearByLinearPValue || (test.pValue * 0.66).toFixed(3)), AlignmentType.CENTER),
           ],
         }),
         new TableRow({
@@ -962,6 +1056,48 @@ export const exportAllContingencyToWord = async (tests: any[], baseVariable?: st
     });
 
     children.push(chiTable as any);
+
+    // Risk Measures (OR/RR) for 2x2 tables
+    if (test.riskMeasures && test.riskMeasures.is2x2) {
+      children.push(new Paragraph({
+        children: [new TextRun({
+          text: 'Risk Estimate',
+          bold: true,
+          font: 'Arial',
+          size: 22,
+        })],
+        spacing: { before: 200, after: 100 },
+      }));
+
+      const riskTable = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [
+          new TableRow({
+            children: [
+              createHeaderCell('Mesure'),
+              createHeaderCell('Value'),
+              createHeaderCell('95% Confidence Interval'),
+            ],
+          }),
+          new TableRow({
+            children: [
+              createCell('Odds Ratio (OR)'),
+              createCell(test.riskMeasures.oddsRatio !== null ? String(test.riskMeasures.oddsRatio) : 'N/A', AlignmentType.CENTER),
+              createCell(test.riskMeasures.oddsRatioCI ? `[${test.riskMeasures.oddsRatioCI[0]} - ${test.riskMeasures.oddsRatioCI[1]}]` : 'N/A', AlignmentType.CENTER),
+            ],
+          }),
+          new TableRow({
+            children: [
+              createCell('Risque Relatif (RR)'),
+              createCell(test.riskMeasures.relativeRisk !== null ? String(test.riskMeasures.relativeRisk) : 'N/A', AlignmentType.CENTER),
+              createCell(test.riskMeasures.relativeRiskCI ? `[${test.riskMeasures.relativeRiskCI[0]} - ${test.riskMeasures.relativeRiskCI[1]}]` : 'N/A', AlignmentType.CENTER),
+            ],
+          }),
+        ],
+      });
+
+      children.push(riskTable as any);
+    }
 
     // Interpretation
     children.push(new Paragraph({
@@ -1005,18 +1141,31 @@ export const exportAllContingencyToWord = async (tests: any[], baseVariable?: st
           createHeaderCell('χ²'),
           createHeaderCell('ddl'),
           createHeaderCell('p-value'),
+          createHeaderCell('OR [IC 95%]'),
+          createHeaderCell('RR [IC 95%]'),
           createHeaderCell('Significatif'),
         ],
       }),
-      ...tests.map(test => new TableRow({
-        children: [
-          createCell(`${test.variable1} × ${test.variable2}`),
-          createCell(String(test.chi2 || 'N/A'), AlignmentType.CENTER),
-          createCell(String(test.df || 'N/A'), AlignmentType.CENTER),
-          createCell(String(test.pValue || 'N/A'), AlignmentType.CENTER),
-          createCell(test.pValue < 0.05 ? 'Oui' : 'Non', AlignmentType.CENTER),
-        ],
-      })),
+      ...tests.map(test => {
+        const orText = test.riskMeasures?.oddsRatio !== null && test.riskMeasures?.oddsRatio !== undefined
+          ? `${test.riskMeasures.oddsRatio}${test.riskMeasures.oddsRatioCI ? ` [${test.riskMeasures.oddsRatioCI[0]}-${test.riskMeasures.oddsRatioCI[1]}]` : ''}`
+          : '-';
+        const rrText = test.riskMeasures?.relativeRisk !== null && test.riskMeasures?.relativeRisk !== undefined
+          ? `${test.riskMeasures.relativeRisk}${test.riskMeasures.relativeRiskCI ? ` [${test.riskMeasures.relativeRiskCI[0]}-${test.riskMeasures.relativeRiskCI[1]}]` : ''}`
+          : '-';
+        
+        return new TableRow({
+          children: [
+            createCell(`${test.variable1} × ${test.variable2}`),
+            createCell(String(test.chi2 || 'N/A'), AlignmentType.CENTER),
+            createCell(String(test.df || 'N/A'), AlignmentType.CENTER),
+            createCell(String(test.pValue || 'N/A'), AlignmentType.CENTER),
+            createCell(orText, AlignmentType.CENTER),
+            createCell(rrText, AlignmentType.CENTER),
+            createCell(test.pValue < 0.05 ? 'Oui' : 'Non', AlignmentType.CENTER),
+          ],
+        });
+      }),
     ],
   });
 

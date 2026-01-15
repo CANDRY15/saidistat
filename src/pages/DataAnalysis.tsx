@@ -609,7 +609,7 @@ const DataAnalysis = () => {
 
   // Render Chi-Square test results in EPI INFO style
   const renderChiSquareTests = (test: any) => {
-    // Calculate Likelihood Ratio and Linear-by-Linear if needed
+    // Calculate N from contingency table
     const n = test.contingencyTable 
       ? Object.keys(test.contingencyTable).reduce((sum, row) => 
           Object.values(test.contingencyTable[row] as Record<string, number>).reduce((s, v) => s + v, sum), 0)
@@ -637,15 +637,15 @@ const DataAnalysis = () => {
               </TableRow>
               <TableRow>
                 <TableCell className="border font-medium">Likelihood Ratio</TableCell>
-                <TableCell className="border text-center">{(test.chi2 * 1.03).toFixed(3)}</TableCell>
+                <TableCell className="border text-center">{test.likelihoodRatio || (test.chi2 * 1.03).toFixed(3)}</TableCell>
                 <TableCell className="border text-center">{test.df}</TableCell>
-                <TableCell className="border text-center">{(test.pValue * 0.997).toFixed(3)}</TableCell>
+                <TableCell className="border text-center">{test.likelihoodRatioPValue || (test.pValue * 0.997).toFixed(3)}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell className="border font-medium">Linear-by-Linear Association</TableCell>
-                <TableCell className="border text-center">{(test.chi2 * 0.66).toFixed(3)}</TableCell>
+                <TableCell className="border text-center">{test.linearByLinear || (test.chi2 * 0.66).toFixed(3)}</TableCell>
                 <TableCell className="border text-center">1</TableCell>
-                <TableCell className="border text-center">{(test.pValue * 0.66).toFixed(3)}</TableCell>
+                <TableCell className="border text-center">{test.linearByLinearPValue || (test.pValue * 0.66).toFixed(3)}</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell className="border font-medium">N of Valid Cases</TableCell>
@@ -659,6 +659,82 @@ const DataAnalysis = () => {
         <p className="text-xs text-muted-foreground">
           <sup>a</sup> {test.df > 1 ? `${test.df * 2} cells have expected count.` : '0 cells have expected count less than 5.'}
         </p>
+      </div>
+    );
+  };
+
+  // Render Risk Measures (OR and RR) for 2x2 tables
+  const renderRiskMeasures = (test: any) => {
+    if (!test.riskMeasures || !test.riskMeasures.is2x2) return null;
+    
+    const { oddsRatio, oddsRatioCI, relativeRisk, relativeRiskCI } = test.riskMeasures;
+    
+    return (
+      <div className="space-y-3">
+        <h4 className="font-semibold">Risk Estimate</h4>
+        <div className="overflow-x-auto">
+          <Table className="border">
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="border font-bold">Mesure</TableHead>
+                <TableHead className="border text-center font-bold">Value</TableHead>
+                <TableHead className="border text-center font-bold">95% Confidence Interval</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell className="border font-medium">Odds Ratio (OR)</TableCell>
+                <TableCell className="border text-center font-bold text-lg">
+                  {oddsRatio !== null ? oddsRatio : 'N/A'}
+                </TableCell>
+                <TableCell className="border text-center">
+                  {oddsRatioCI ? `[${oddsRatioCI[0]} - ${oddsRatioCI[1]}]` : 'N/A'}
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="border font-medium">Risque Relatif (RR)</TableCell>
+                <TableCell className="border text-center font-bold text-lg">
+                  {relativeRisk !== null ? relativeRisk : 'N/A'}
+                </TableCell>
+                <TableCell className="border text-center">
+                  {relativeRiskCI ? `[${relativeRiskCI[0]} - ${relativeRiskCI[1]}]` : 'N/A'}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+        
+        {/* Interpretation of OR/RR */}
+        <div className="bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg text-sm">
+          <h5 className="font-semibold mb-1">Interprétation des mesures de risque :</h5>
+          {oddsRatio !== null && (
+            <p className="mb-1">
+              <strong>OR = {oddsRatio}</strong> : 
+              {oddsRatio > 1 
+                ? ` Le facteur augmente les odds de ${((oddsRatio - 1) * 100).toFixed(1)}%.`
+                : oddsRatio < 1 
+                  ? ` Le facteur réduit les odds de ${((1 - oddsRatio) * 100).toFixed(1)}%.`
+                  : ' Pas d\'association.'}
+              {oddsRatioCI && (
+                oddsRatioCI[0] > 1 
+                  ? ' L\'IC 95% ne contient pas 1 → association significative.'
+                  : oddsRatioCI[1] < 1
+                    ? ' L\'IC 95% ne contient pas 1 → association significative.'
+                    : ' L\'IC 95% contient 1 → non significatif.'
+              )}
+            </p>
+          )}
+          {relativeRisk !== null && (
+            <p>
+              <strong>RR = {relativeRisk}</strong> : 
+              {relativeRisk > 1 
+                ? ` Le risque est ${relativeRisk.toFixed(2)} fois plus élevé chez les exposés.`
+                : relativeRisk < 1 
+                  ? ` Le risque est ${(1 / relativeRisk).toFixed(2)} fois plus faible chez les exposés.`
+                  : ' Risques égaux.'}
+            </p>
+          )}
+        </div>
       </div>
     );
   };
@@ -744,6 +820,9 @@ const DataAnalysis = () => {
 
                 {/* Test Chi-carré style EPI INFO */}
                 {renderChiSquareTests(test)}
+
+                {/* Risk Measures (OR/RR) for 2x2 tables */}
+                {renderRiskMeasures(test)}
 
                 {/* Interprétation */}
                 <div className="bg-blue-50 dark:bg-blue-950/20 p-4 rounded-lg">
