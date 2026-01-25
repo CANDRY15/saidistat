@@ -389,6 +389,8 @@ serve(async (req) => {
       throw new Error('No data provided');
     }
 
+    console.log(`Data rows: ${data.length}, Analysis type: ${analysisSubType}`);
+
     let results: any = {};
     
     if (analysisSubType === 'chi2') {
@@ -396,9 +398,11 @@ serve(async (req) => {
       const chi2Results: Chi2Result[] = [];
       
       if (baseVariable && crossingVariables && crossingVariables.length > 0) {
+        console.log(`Base variable: ${baseVariable}, Crossing: ${crossingVariables.join(', ')}`);
         // New workflow: one table per crossing variable
         for (const crossVar of crossingVariables) {
           const result = calculateChi2(data, baseVariable, crossVar);
+          console.log(`Chi2 for ${baseVariable} × ${crossVar}: ${Object.keys(result.contingencyTable).length} rows, ${Object.keys(Object.values(result.contingencyTable)[0] || {}).length} cols`);
           chi2Results.push(result);
         }
       } else if (variables && variables.length >= 2) {
