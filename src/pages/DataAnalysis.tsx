@@ -508,7 +508,7 @@ const DataAnalysis = () => {
     return result;
   };
 
-  // Render contingency table with all modalities - Format like the Word document example
+  // Render contingency table with all modalities - Format SPSS/EpiInfo style
   const renderContingencyTable = (test: any, tableIndex: number) => {
     if (!test.contingencyTable) return null;
     
@@ -544,95 +544,117 @@ const DataAnalysis = () => {
     rows.forEach(row => {
       rowTotals[row] = cols.reduce((sum, col) => sum + (test.contingencyTable[row]?.[col] || 0), 0);
     });
+
+    // Format percentage with comma as decimal separator
+    const formatPct = (value: number) => value.toFixed(1).replace('.', ',');
     
     return (
       <div className="space-y-4">
-        <h4 className="font-semibold">Tableau {toRoman(tableIndex + 1)} : {test.variable1} × {test.variable2}</h4>
+        <h4 className="font-semibold text-lg">
+          Tableau {toRoman(tableIndex + 1)} : Répartition de {test.variable1} selon {test.variable2}
+        </h4>
         
         <div className="overflow-x-auto">
-          <Table className="border">
+          <Table className="border text-sm">
             <TableHeader>
-              {/* First header row: variable names */}
-              <TableRow className="bg-muted/50">
-                <TableHead rowSpan={2} className="border text-center font-bold align-middle min-w-[120px]">
+              {/* Header row with variable names */}
+              <TableRow className="bg-muted">
+                <TableHead rowSpan={2} className="border-2 border-border text-center font-bold align-middle min-w-[140px] bg-muted/80">
                   {test.variable1}
                 </TableHead>
-                <TableHead colSpan={cols.length * 2} className="border text-center font-bold">
+                <TableHead colSpan={cols.length} className="border-2 border-border text-center font-bold bg-muted/80">
                   {test.variable2}
                 </TableHead>
-                <TableHead colSpan={2} rowSpan={2} className="border text-center font-bold bg-primary/10 align-middle">
+                <TableHead rowSpan={2} className="border-2 border-border text-center font-bold bg-muted/80 align-middle min-w-[80px]">
                   Total
                 </TableHead>
               </TableRow>
-              {/* Second header row: each modality with N and % */}
-              <TableRow className="bg-muted/30">
+              {/* Second header row: each modality */}
+              <TableRow className="bg-muted/50">
                 {cols.map((col, idx) => (
-                  <React.Fragment key={`header-${col}-${idx}`}>
-                    <TableHead className="border text-center font-medium min-w-[60px]">
-                      <span className="font-bold">{col}</span>
-                      <div className="text-xs text-muted-foreground mt-1">N</div>
-                    </TableHead>
-                    <TableHead className="border text-center font-medium min-w-[60px]">
-                      <div className="text-xs text-muted-foreground mt-1">%</div>
-                    </TableHead>
-                  </React.Fragment>
+                  <TableHead key={`header-${col}-${idx}`} className="border-2 border-border text-center font-semibold min-w-[100px]">
+                    {col}
+                  </TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((row, rowIdx) => {
                 const rowTotal = rowTotals[row];
-                const rowPctOfTotal = grandTotal > 0 ? ((rowTotal / grandTotal) * 100).toFixed(1) : '0,0';
+                const rowPctOfTotal = grandTotal > 0 ? (rowTotal / grandTotal) * 100 : 0;
                 
                 return (
-                  <TableRow key={`row-${row}-${rowIdx}`}>
-                    <TableCell className="border font-medium bg-muted/20">
-                      <span className="font-bold">{row}</span>
+                  <TableRow key={`row-${row}-${rowIdx}`} className={rowIdx % 2 === 0 ? 'bg-background' : 'bg-muted/30'}>
+                    <TableCell className="border-2 border-border font-semibold bg-muted/50">
+                      {row}
                     </TableCell>
                     {cols.map((col, colIdx) => {
                       const count = test.contingencyTable[row]?.[col] || 0;
                       const colTotal = colTotals[col];
-                      const percentage = colTotal > 0 ? ((count / colTotal) * 100).toFixed(1) : '0,0';
+                      const rowTotal = rowTotals[row];
+                      const pctCol = colTotal > 0 ? (count / colTotal) * 100 : 0;
+                      const pctRow = rowTotal > 0 ? (count / rowTotal) * 100 : 0;
                       
                       return (
-                        <React.Fragment key={`cell-${row}-${col}-${rowIdx}-${colIdx}`}>
-                          <TableCell className="border text-center">
-                            {count}
-                          </TableCell>
-                          <TableCell className="border text-center text-muted-foreground">
-                            {percentage}%
-                          </TableCell>
-                        </React.Fragment>
+                        <TableCell key={`cell-${row}-${col}-${rowIdx}-${colIdx}`} className="border border-border/50 text-center p-2">
+                          <div className="space-y-0.5">
+                            <div className="font-bold text-base">{count}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatPct(pctCol)}% col
+                            </div>
+                            <div className="text-xs text-primary">
+                              {formatPct(pctRow)}% row
+                            </div>
+                          </div>
+                        </TableCell>
                       );
                     })}
                     {/* Row total */}
-                    <TableCell className="border text-center font-medium bg-primary/5">
-                      {rowTotal}
-                    </TableCell>
-                    <TableCell className="border text-center font-medium bg-primary/5 text-muted-foreground">
-                      {rowPctOfTotal}%
+                    <TableCell className="border-2 border-border text-center font-semibold bg-muted/50">
+                      <div className="space-y-0.5">
+                        <div className="font-bold text-base">{rowTotal}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatPct(rowPctOfTotal)}%
+                        </div>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
               })}
               {/* Total row */}
-              <TableRow className="bg-primary/10 font-bold">
-                <TableCell className="border font-bold">Total</TableCell>
-                {cols.map((col, idx) => (
-                  <React.Fragment key={`total-${col}-${idx}`}>
-                    <TableCell className="border text-center">
-                      {colTotals[col]}
+              <TableRow className="bg-muted font-bold">
+                <TableCell className="border-2 border-border font-bold bg-muted/80">
+                  Total
+                </TableCell>
+                {cols.map((col, idx) => {
+                  const colTotal = colTotals[col];
+                  const pctOfTotal = grandTotal > 0 ? (colTotal / grandTotal) * 100 : 0;
+                  
+                  return (
+                    <TableCell key={`total-${col}-${idx}`} className="border-2 border-border text-center">
+                      <div className="space-y-0.5">
+                        <div className="font-bold text-base">{colTotal}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatPct(pctOfTotal)}%
+                        </div>
+                      </div>
                     </TableCell>
-                    <TableCell className="border text-center text-muted-foreground">
-                      100,0%
-                    </TableCell>
-                  </React.Fragment>
-                ))}
-                <TableCell className="border text-center">{grandTotal}</TableCell>
-                <TableCell className="border text-center text-muted-foreground">100,0%</TableCell>
+                  );
+                })}
+                <TableCell className="border-2 border-border text-center bg-muted/80">
+                  <div className="font-bold text-lg">{grandTotal}</div>
+                  <div className="text-xs">100,0%</div>
+                </TableCell>
               </TableRow>
             </TableBody>
           </Table>
+        </div>
+        
+        {/* Legend */}
+        <div className="text-xs text-muted-foreground flex gap-4 mt-2">
+          <span>N = effectif</span>
+          <span>% col = pourcentage en colonne</span>
+          <span className="text-primary">% row = pourcentage en ligne</span>
         </div>
       </div>
     );
