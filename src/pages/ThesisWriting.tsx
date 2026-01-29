@@ -93,12 +93,22 @@ const ThesisWriting = () => {
   const [showReferences, setShowReferences] = useState(false);
 
   const introductionSections = [
-    { id: 'context', title: 'Contexte et justification', icon: Lightbulb },
-    { id: 'state_of_question', title: 'État de la question', icon: FileSearch },
-    { id: 'problematic', title: 'Problématique', icon: Target },
-    { id: 'choice_relevance', title: 'Choix et intérêt du sujet', icon: CheckCircle },
-    { id: 'objectives', title: 'Objectifs', icon: List },
-    { id: 'subdivision', title: 'Subdivision du travail', icon: BookText },
+    { id: 'context', title: 'Contexte et justification', icon: Lightbulb, description: '2 paragraphes - Cadre général et pertinence' },
+    { id: 'state_of_question', title: 'État de la question', icon: FileSearch, description: '3 paragraphes - Revue de littérature pyramide inversée' },
+    { id: 'problematic', title: 'Problématique', icon: Target, description: '3 paragraphes - Problème et questions de recherche' },
+    { id: 'choice_relevance', title: 'Choix et intérêt du sujet', icon: CheckCircle, description: '4 paragraphes - Intérêts personnel, scientifique, communautaire' },
+    { id: 'objectives', title: 'Objectifs', icon: List, description: 'Objectif général + objectifs spécifiques SMART' },
+    { id: 'subdivision', title: 'Subdivision du travail', icon: BookText, description: 'Organisation du document' },
+  ];
+
+  const methodologySections = [
+    { id: 'methodology', title: 'Matériel et Méthodes', icon: FlaskConical, description: 'Méthodologie complète détaillée' },
+  ];
+
+  const resultsSections = [
+    { id: 'results', title: 'Résultats', icon: FileText, description: 'Présentation objective des données' },
+    { id: 'discussion', title: 'Discussion', icon: BookOpen, description: 'Interprétation et comparaison avec la littérature' },
+    { id: 'conclusion', title: 'Conclusion', icon: CheckCircle, description: 'Synthèse et recommandations' },
   ];
 
   // Check auth and load projects on mount
@@ -322,7 +332,8 @@ const ThesisWriting = () => {
         references = data.references;
       }
 
-      const sectionTitle = introductionSections.find(s => s.id === sectionId)?.title || sectionId;
+      const allSections = [...introductionSections, ...methodologySections, ...resultsSections];
+      const sectionTitle = allSections.find(s => s.id === sectionId)?.title || sectionId;
       
       setGeneratedSections(prev => {
         const existing = prev.findIndex(s => s.id === sectionId);
@@ -677,17 +688,21 @@ const ThesisWriting = () => {
                   const isGenerated = generatedSections.some(s => s.id === section.id);
                   const Icon = section.icon;
                   return (
-                    <Button
-                      key={section.id}
-                      variant={isGenerated ? "secondary" : "outline"}
-                      className="w-full justify-start"
-                      onClick={() => generateSection(section.id)}
-                      disabled={isLoading}
-                    >
-                      <Icon className="w-4 h-4 mr-2" />
-                      {section.title}
-                      {isGenerated && <CheckCircle className="w-4 h-4 ml-auto text-green-500" />}
-                    </Button>
+                    <div key={section.id} className="space-y-1">
+                      <Button
+                        variant={isGenerated ? "secondary" : "outline"}
+                        className="w-full justify-start h-auto py-2"
+                        onClick={() => generateSection(section.id)}
+                        disabled={isLoading}
+                      >
+                        <Icon className="w-4 h-4 mr-2 flex-shrink-0" />
+                        <div className="text-left flex-1">
+                          <div className="font-medium">{section.title}</div>
+                          <div className="text-xs text-muted-foreground font-normal">{section.description}</div>
+                        </div>
+                        {isGenerated && <CheckCircle className="w-4 h-4 ml-2 text-primary flex-shrink-0" />}
+                      </Button>
+                    </div>
                   );
                 })}
 
@@ -839,104 +854,216 @@ const ThesisWriting = () => {
           </div>
         )}
 
-        {/* Step 5: Theoretical Part */}
+        {/* Step 5: Full Document Generation */}
         {step === 5 && (
-          <Card className="max-w-4xl mx-auto">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FlaskConical className="w-5 h-5 text-primary" />
-                Étape 5: Partie Théorique
-              </CardTitle>
-              <CardDescription>
-                Générez les considérations théoriques de votre travail
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <Button 
-                  onClick={() => generateSection('theoretical_part')} 
-                  disabled={isLoading}
-                  size="lg"
-                >
-                  {isLoading ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Génération...</>
-                  ) : (
-                    <><BookText className="w-4 h-4 mr-2" /> Généralités sur le sujet</>
-                  )}
-                </Button>
-              </div>
-
-              {generatedSections.filter(s => s.id === 'theoretical_part').map((section) => (
-                <div key={section.id} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-bold text-lg">{section.title}</h3>
-                    <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
-                        variant={editingSectionId === section.id ? "secondary" : "ghost"}
-                        onClick={() => setEditingSectionId(
-                          editingSectionId === section.id ? null : section.id
-                        )}
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        onClick={() => copyToClipboard(section.content)}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Sections Panel */}
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="text-lg">Sections du Mémoire</CardTitle>
+                <CardDescription>Générez toutes les parties de votre travail</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Theoretical Part */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">Partie Théorique</h4>
+                  <Button
+                    variant={generatedSections.some(s => s.id === 'theoretical_part') ? "secondary" : "outline"}
+                    className="w-full justify-start h-auto py-2"
+                    onClick={() => generateSection('theoretical_part')}
+                    disabled={isLoading}
+                  >
+                    <BookText className="w-4 h-4 mr-2 flex-shrink-0" />
+                    <div className="text-left flex-1">
+                      <div className="font-medium">Généralités / Revue de littérature</div>
+                      <div className="text-xs text-muted-foreground font-normal">Définitions, épidémiologie, physiopathologie...</div>
                     </div>
-                  </div>
-                  
-                  {editingSectionId === section.id ? (
-                    <div className="space-y-2">
-                      <RichTextEditor
-                        content={section.content}
-                        onChange={(content) => updateSectionContent(section.id, content)}
-                      />
-                      <Button 
-                        size="sm" 
-                        onClick={() => {
-                          setEditingSectionId(null);
-                          saveProject();
-                        }}
-                      >
-                        <Save className="w-4 h-4 mr-2" /> Enregistrer
-                      </Button>
-                    </div>
-                  ) : (
-                    <ScrollArea className="h-[400px]">
-                      <div 
-                        className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap"
-                        style={{ fontFamily: '"Times New Roman", Times, serif', lineHeight: 1.5 }}
-                      >
-                        {section.content}
-                      </div>
-                    </ScrollArea>
-                  )}
+                    {generatedSections.some(s => s.id === 'theoretical_part') && 
+                      <CheckCircle className="w-4 h-4 ml-2 text-primary flex-shrink-0" />
+                    }
+                  </Button>
                 </div>
-              ))}
 
-              <div className="flex gap-4 pt-4">
-                <Button variant="outline" onClick={() => setStep(4)}>
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Retour à l'introduction
-                </Button>
-                <Button onClick={handleExportWord} disabled={generatedSections.length === 0}>
-                  <FileType className="w-4 h-4 mr-2" /> Export Word
-                </Button>
-              </div>
+                {/* Methodology */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">Méthodologie</h4>
+                  {methodologySections.map((section) => {
+                    const isGenerated = generatedSections.some(s => s.id === section.id);
+                    const Icon = section.icon;
+                    return (
+                      <Button
+                        key={section.id}
+                        variant={isGenerated ? "secondary" : "outline"}
+                        className="w-full justify-start h-auto py-2"
+                        onClick={() => generateSection(section.id)}
+                        disabled={isLoading}
+                      >
+                        <Icon className="w-4 h-4 mr-2 flex-shrink-0" />
+                        <div className="text-left flex-1">
+                          <div className="font-medium">{section.title}</div>
+                          <div className="text-xs text-muted-foreground font-normal">{section.description}</div>
+                        </div>
+                        {isGenerated && <CheckCircle className="w-4 h-4 ml-2 text-primary flex-shrink-0" />}
+                      </Button>
+                    );
+                  })}
+                </div>
 
-              <div className="p-4 bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground">
-                  <strong>Note:</strong> La section Méthodologie sera générée après avoir analysé votre base de données 
-                  dans le module d'analyse de données. Les résultats et la discussion seront également basés sur vos 
-                  analyses statistiques réelles.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+                {/* Results & Discussion */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">Résultats & Discussion</h4>
+                  {resultsSections.map((section) => {
+                    const isGenerated = generatedSections.some(s => s.id === section.id);
+                    const Icon = section.icon;
+                    return (
+                      <Button
+                        key={section.id}
+                        variant={isGenerated ? "secondary" : "outline"}
+                        className="w-full justify-start h-auto py-2"
+                        onClick={() => generateSection(section.id)}
+                        disabled={isLoading}
+                      >
+                        <Icon className="w-4 h-4 mr-2 flex-shrink-0" />
+                        <div className="text-left flex-1">
+                          <div className="font-medium">{section.title}</div>
+                          <div className="text-xs text-muted-foreground font-normal">{section.description}</div>
+                        </div>
+                        {isGenerated && <CheckCircle className="w-4 h-4 ml-2 text-primary flex-shrink-0" />}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <Separator className="my-4" />
+
+                <Button 
+                  variant={showReferences ? "secondary" : "outline"} 
+                  onClick={() => setShowReferences(!showReferences)} 
+                  className="w-full"
+                >
+                  <BookMarked className="w-4 h-4 mr-2" />
+                  Références ({bibliography.length})
+                </Button>
+
+                {generatedSections.length > 0 && (
+                  <Button onClick={handleExportWord} variant="outline" className="w-full">
+                    <FileType className="w-4 h-4 mr-2" /> Export Word
+                  </Button>
+                )}
+
+                <Button variant="outline" onClick={() => setStep(4)} className="w-full">
+                  <ArrowLeft className="w-4 h-4 mr-2" /> Retour à l'Introduction
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* References Panel (when shown) */}
+            {showReferences && (
+              <Card className="lg:col-span-2">
+                <CardContent className="pt-6">
+                  <ReferenceManager
+                    references={bibliography}
+                    onReferencesChange={(refs) => {
+                      setBibliography(refs);
+                      setTimeout(() => saveProject(), 500);
+                    }}
+                    citationFormat={citationFormat}
+                    onFormatChange={(format) => {
+                      setCitationFormat(format);
+                      setTimeout(() => saveProject(), 500);
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Generated Content */}
+            {!showReferences && (
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Contenu généré</span>
+                    {generatedSections.length > 0 && (
+                      <Badge variant="secondary">{generatedSections.length} sections</Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>
+                    Sections générées pour la partie pratique
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[600px] pr-4">
+                    {generatedSections.filter(s => 
+                      ['theoretical_part', 'methodology', 'results', 'discussion', 'conclusion'].includes(s.id)
+                    ).length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <FlaskConical className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <p>Cliquez sur une section pour la générer</p>
+                        <p className="text-sm mt-2">
+                          Conseil: Générez d'abord les "Généralités" puis la "Méthodologie"
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {generatedSections
+                          .filter(s => ['theoretical_part', 'methodology', 'results', 'discussion', 'conclusion'].includes(s.id))
+                          .map((section) => (
+                          <div key={section.id} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="font-bold text-lg">{section.title}</h3>
+                              <div className="flex gap-2">
+                                <Button 
+                                  size="sm" 
+                                  variant={editingSectionId === section.id ? "secondary" : "ghost"}
+                                  onClick={() => setEditingSectionId(
+                                    editingSectionId === section.id ? null : section.id
+                                  )}
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => copyToClipboard(section.content)}
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {editingSectionId === section.id ? (
+                              <div className="space-y-2">
+                                <RichTextEditor
+                                  content={section.content}
+                                  onChange={(content) => updateSectionContent(section.id, content)}
+                                />
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => {
+                                    setEditingSectionId(null);
+                                    saveProject();
+                                  }}
+                                >
+                                  <Save className="w-4 h-4 mr-2" /> Enregistrer
+                                </Button>
+                              </div>
+                            ) : (
+                              <div 
+                                className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap"
+                                style={{ fontFamily: '"Times New Roman", Times, serif', lineHeight: 1.5 }}
+                              >
+                                {section.content}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
       </main>
     </div>
