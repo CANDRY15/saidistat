@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,8 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { 
   ArrowLeft, ArrowRight, BookOpen, FileText, 
   CheckCircle, Loader2, Copy, Download, Sparkles, GraduationCap,
-  Target, FileSearch, Lightbulb, List, BookText, FlaskConical,
-  Edit3, Save, FolderOpen, Plus, Trash2, FileType, BookMarked
+  Edit3, Save, FolderOpen, Plus, Trash2, FileType, BookMarked,
+  Upload, BarChart3, FileSpreadsheet
 } from "lucide-react";
 import saidistatLogo from "@/assets/saidistat-logo.jpg";
 import { Link, useNavigate } from "react-router-dom";
@@ -29,16 +29,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-
-interface StudyTypeResult {
-  studyType: string;
-  justification: string;
-  characteristics: string[];
-  suggestedObjectives: {
-    general: string;
-    specific: string[];
-  };
-}
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 
 interface GeneratedSection {
   id: string;
@@ -54,7 +46,7 @@ interface ThesisProject {
   population: string | null;
   period: string | null;
   location: string | null;
-  study_type: StudyTypeResult | null;
+  study_type: any | null;
   study_type_approved: boolean;
   current_step: number;
   generated_sections: GeneratedSection[];
@@ -67,7 +59,9 @@ interface ThesisProject {
 const ThesisWriting = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Steps: 1=Topic, 2=Introduction, 3=Theoretical, 4=Methodology, 5=Results, 6=Discussion, 7=Conclusion
   const [step, setStep] = useState(1);
   const [topic, setTopic] = useState("");
   const [domain, setDomain] = useState("Médecine");
@@ -77,8 +71,7 @@ const ThesisWriting = () => {
   
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [studyType, setStudyType] = useState<StudyTypeResult | null>(null);
-  const [studyTypeApproved, setStudyTypeApproved] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
   
   const [generatedSections, setGeneratedSections] = useState<GeneratedSection[]>([]);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
@@ -91,24 +84,18 @@ const ThesisWriting = () => {
   const [bibliography, setBibliography] = useState<Reference[]>([]);
   const [citationFormat, setCitationFormat] = useState<CitationFormat>('apa');
   const [showReferences, setShowReferences] = useState(false);
+  
+  // Excel data for results
+  const [excelData, setExcelData] = useState<any>(null);
 
-  const introductionSections = [
-    { id: 'context', title: 'Contexte et justification', icon: Lightbulb, description: '2 paragraphes - Cadre général et pertinence' },
-    { id: 'state_of_question', title: 'État de la question', icon: FileSearch, description: '3 paragraphes - Revue de littérature pyramide inversée' },
-    { id: 'problematic', title: 'Problématique', icon: Target, description: '3 paragraphes - Problème et questions de recherche' },
-    { id: 'choice_relevance', title: 'Choix et intérêt du sujet', icon: CheckCircle, description: '4 paragraphes - Intérêts personnel, scientifique, communautaire' },
-    { id: 'objectives', title: 'Objectifs', icon: List, description: 'Objectif général + objectifs spécifiques SMART' },
-    { id: 'subdivision', title: 'Subdivision du travail', icon: BookText, description: 'Organisation du document' },
-  ];
-
-  const methodologySections = [
-    { id: 'methodology', title: 'Matériel et Méthodes', icon: FlaskConical, description: 'Méthodologie complète détaillée' },
-  ];
-
-  const resultsSections = [
-    { id: 'results', title: 'Résultats', icon: FileText, description: 'Présentation objective des données' },
-    { id: 'discussion', title: 'Discussion', icon: BookOpen, description: 'Interprétation et comparaison avec la littérature' },
-    { id: 'conclusion', title: 'Conclusion', icon: CheckCircle, description: 'Synthèse et recommandations' },
+  const stepLabels = [
+    { num: 1, label: "Sujet", icon: BookOpen },
+    { num: 2, label: "Introduction", icon: FileText },
+    { num: 3, label: "Théorie", icon: BookMarked },
+    { num: 4, label: "Méthodologie", icon: BarChart3 },
+    { num: 5, label: "Résultats", icon: FileSpreadsheet },
+    { num: 6, label: "Discussion", icon: Edit3 },
+    { num: 7, label: "Conclusion", icon: CheckCircle },
   ];
 
   // Check auth and load projects on mount
@@ -133,10 +120,9 @@ const ThesisWriting = () => {
       
       if (error) throw error;
       
-      // Cast the data properly
       const projects = (data || []).map(p => ({
         ...p,
-        study_type: p.study_type as unknown as StudyTypeResult | null,
+        study_type: p.study_type as any,
         generated_sections: (p.generated_sections as unknown as GeneratedSection[]) || [],
         bibliography: (p.bibliography as unknown as Reference[]) || [],
         citation_format: (p.citation_format as CitationFormat) || 'apa'
@@ -155,8 +141,6 @@ const ThesisWriting = () => {
     setPopulation(project.population || '');
     setPeriod(project.period || '');
     setLocation(project.location || '');
-    setStudyType(project.study_type);
-    setStudyTypeApproved(project.study_type_approved);
     setGeneratedSections(project.generated_sections || []);
     setBibliography(project.bibliography || []);
     setCitationFormat(project.citation_format || 'apa');
@@ -177,8 +161,8 @@ const ThesisWriting = () => {
         population: population || null,
         period: period || null,
         location: location || null,
-        study_type: studyType as any,
-        study_type_approved: studyTypeApproved,
+        study_type: null,
+        study_type_approved: false,
         current_step: step,
         generated_sections: generatedSections as any,
         bibliography: bibliography as any,
@@ -186,7 +170,6 @@ const ThesisWriting = () => {
       };
 
       if (currentProject) {
-        // Update existing
         const { error } = await supabase
           .from('thesis_projects')
           .update(projectData)
@@ -195,7 +178,6 @@ const ThesisWriting = () => {
         if (error) throw error;
         toast.success("Projet sauvegardé");
       } else {
-        // Create new
         const { data, error } = await supabase
           .from('thesis_projects')
           .insert(projectData)
@@ -206,10 +188,10 @@ const ThesisWriting = () => {
         
         setCurrentProject({
           ...data,
-          study_type: data.study_type as unknown as StudyTypeResult | null,
-          generated_sections: (data.generated_sections as unknown as GeneratedSection[]) || [],
-          bibliography: (data.bibliography as unknown as Reference[]) || [],
-          citation_format: (data.citation_format as CitationFormat) || 'apa'
+          study_type: null,
+          generated_sections: [],
+          bibliography: [],
+          citation_format: 'apa'
         });
         toast.success("Nouveau projet créé");
       }
@@ -251,25 +233,145 @@ const ThesisWriting = () => {
     setPopulation('');
     setPeriod('');
     setLocation('');
-    setStudyType(null);
-    setStudyTypeApproved(false);
     setGeneratedSections([]);
     setBibliography([]);
     setCitationFormat('apa');
     setStep(1);
     setCurrentProject(null);
+    setExcelData(null);
   };
 
-  const identifyStudyType = async () => {
+  // Generate Introduction (complete)
+  const generateIntroduction = async () => {
     if (!topic.trim()) {
       toast.error("Veuillez entrer un sujet de recherche");
       return;
     }
 
     setIsLoading(true);
+    setGenerationProgress(10);
+    
     try {
       const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
-        body: { action: 'identify_study', topic }
+        body: { 
+          action: 'generate_introduction', 
+          topic,
+          context: { domain, population, period, location }
+        }
+      });
+
+      setGenerationProgress(80);
+
+      if (error) throw error;
+      
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      const content = data.content || '';
+      
+      setGeneratedSections(prev => {
+        const existing = prev.findIndex(s => s.id === 'introduction');
+        const newSection = { 
+          id: 'introduction', 
+          title: 'Introduction', 
+          content,
+          references: data.references?.map((r: any) => r.fullReference || r.citation) || []
+        };
+        
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = newSection;
+          return updated;
+        }
+        return [...prev, newSection];
+      });
+
+      setGenerationProgress(100);
+      toast.success("Introduction générée (4+ pages)");
+      setStep(2);
+      
+      setTimeout(() => saveProject(), 500);
+    } catch (error: any) {
+      console.error('Error:', error);
+      toast.error(error.message || "Erreur lors de la génération");
+    } finally {
+      setIsLoading(false);
+      setGenerationProgress(0);
+    }
+  };
+
+  // Generate Theoretical Part
+  const generateTheoretical = async () => {
+    setIsLoading(true);
+    setGenerationProgress(10);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
+        body: { 
+          action: 'generate_theoretical', 
+          topic,
+          context: { domain, population, period, location }
+        }
+      });
+
+      setGenerationProgress(80);
+
+      if (error) throw error;
+      
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      let content = data.content || '';
+      if (data.sections) {
+        content = data.sections.map((s: any) => `<h3>${s.title}</h3>\n${s.content}`).join('\n\n');
+      }
+      
+      setGeneratedSections(prev => {
+        const existing = prev.findIndex(s => s.id === 'theoretical');
+        const newSection = { 
+          id: 'theoretical', 
+          title: 'Considérations Théoriques', 
+          content,
+          references: data.references?.map((r: any) => r.fullReference || r.citation) || []
+        };
+        
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = newSection;
+          return updated;
+        }
+        return [...prev, newSection];
+      });
+
+      setGenerationProgress(100);
+      toast.success("Partie théorique générée (15+ pages)");
+      
+      setTimeout(() => saveProject(), 500);
+    } catch (error: any) {
+      console.error('Error:', error);
+      toast.error(error.message || "Erreur lors de la génération");
+    } finally {
+      setIsLoading(false);
+      setGenerationProgress(0);
+    }
+  };
+
+  // Generate Methodology
+  const generateMethodology = async () => {
+    setIsLoading(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
+        body: { 
+          action: 'generate_methodology', 
+          topic,
+          studyType: 'Étude descriptive transversale',
+          context: { domain, population, period, location }
+        }
       });
 
       if (error) throw error;
@@ -279,33 +381,144 @@ const ThesisWriting = () => {
         return;
       }
 
-      setStudyType(data);
-      setStep(2);
-      toast.success("Type d'étude identifié");
-      await saveProject();
+      let content = data.content || '';
+      if (data.sections) {
+        content = data.sections.map((s: any) => `<h3>${s.title}</h3>\n${s.content}`).join('\n\n');
+      }
+      
+      setGeneratedSections(prev => {
+        const existing = prev.findIndex(s => s.id === 'methodology');
+        const newSection = { id: 'methodology', title: 'Matériel et Méthodes', content };
+        
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = newSection;
+          return updated;
+        }
+        return [...prev, newSection];
+      });
+
+      toast.success("Méthodologie générée");
+      setTimeout(() => saveProject(), 500);
     } catch (error: any) {
       console.error('Error:', error);
-      toast.error(error.message || "Erreur lors de l'identification du type d'étude");
+      toast.error(error.message || "Erreur lors de la génération");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const generateSection = async (sectionId: string) => {
+  // Handle Excel upload for results
+  const handleExcelUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // For now, we'll read CSV/Excel as text and parse it
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target?.result as string;
+      if (text) {
+        // Simple CSV parsing
+        const lines = text.split('\n').filter(l => l.trim());
+        const headers = lines[0]?.split(',').map(h => h.trim());
+        const rows = lines.slice(1).map(line => {
+          const values = line.split(',').map(v => v.trim());
+          const row: any = {};
+          headers?.forEach((h, i) => {
+            row[h] = values[i] || '';
+          });
+          return row;
+        });
+        
+        setExcelData({ headers, rows, rowCount: rows.length });
+        toast.success(`Données chargées: ${rows.length} lignes`);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Analyze data and generate results
+  const analyzeDataAndGenerateResults = async () => {
+    if (!excelData) {
+      toast.error("Veuillez d'abord téléverser vos données");
+      return;
+    }
+
     setIsLoading(true);
+    
     try {
       const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
-        body: {
-          action: 'generate_section',
+        body: { 
+          action: 'analyze_data', 
           topic,
-          studyType: studyType?.studyType,
-          section: sectionId,
-          context: {
-            domain,
-            population,
-            period,
+          excelData,
+          context: { domain, population, period, location }
+        }
+      });
+
+      if (error) throw error;
+      
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      let content = data.content || '';
+      if (data.tables) {
+        // Add tables to content
+        data.tables.forEach((table: any) => {
+          content += `\n\n<h4>Tableau ${table.number}: ${table.title}</h4>\n`;
+          // Format table as HTML
+          if (table.data && table.data.length > 0) {
+            content += '<table border="1" style="width:100%; border-collapse: collapse;">';
+            content += '<tr>' + table.data[0].map((h: string) => `<th style="padding:8px; background:#f5f5f5;">${h}</th>`).join('') + '</tr>';
+            table.data.slice(1).forEach((row: string[]) => {
+              content += '<tr>' + row.map((c: string) => `<td style="padding:8px;">${c}</td>`).join('') + '</tr>';
+            });
+            content += '</table>';
+          }
+        });
+      }
+      
+      setGeneratedSections(prev => {
+        const existing = prev.findIndex(s => s.id === 'results');
+        const newSection = { id: 'results', title: 'Résultats', content };
+        
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = newSection;
+          return updated;
+        }
+        return [...prev, newSection];
+      });
+
+      toast.success("Résultats générés (sans références)");
+      setTimeout(() => saveProject(), 500);
+    } catch (error: any) {
+      console.error('Error:', error);
+      toast.error(error.message || "Erreur lors de l'analyse");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Generate Discussion
+  const generateDiscussion = async () => {
+    setIsLoading(true);
+    
+    try {
+      const resultsSection = generatedSections.find(s => s.id === 'results');
+      
+      const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
+        body: { 
+          action: 'generate_discussion', 
+          topic,
+          context: { 
+            domain, 
+            population, 
+            period, 
             location,
-            objective: studyType?.suggestedObjectives.general
+            existingSections: [resultsSection?.content || '']
           }
         }
       });
@@ -317,27 +530,19 @@ const ThesisWriting = () => {
         return;
       }
 
-      let content = '';
-      let references: string[] = [];
-
-      if (data.content) {
-        content = data.content;
-      } else if (data.generalObjective) {
-        content = `**Objectif général:**\n${data.generalObjective}\n\n**Objectifs spécifiques:**\n${data.specificObjectives?.map((obj: string, i: number) => `${i + 1}. ${obj}`).join('\n')}`;
-      } else if (data.sections) {
-        content = data.sections.map((s: any) => `### ${s.title}\n\n${s.content}`).join('\n\n');
+      let content = data.content || '';
+      if (data.sections) {
+        content = data.sections.map((s: any) => `<h3>${s.title}</h3>\n${s.content}`).join('\n\n');
       }
-
-      if (data.references) {
-        references = data.references;
-      }
-
-      const allSections = [...introductionSections, ...methodologySections, ...resultsSections];
-      const sectionTitle = allSections.find(s => s.id === sectionId)?.title || sectionId;
       
       setGeneratedSections(prev => {
-        const existing = prev.findIndex(s => s.id === sectionId);
-        const newSection = { id: sectionId, title: sectionTitle, content, references };
+        const existing = prev.findIndex(s => s.id === 'discussion');
+        const newSection = { 
+          id: 'discussion', 
+          title: 'Discussion', 
+          content,
+          references: data.references?.map((r: any) => r.fullReference || r.citation) || []
+        };
         
         if (existing >= 0) {
           const updated = [...prev];
@@ -347,9 +552,7 @@ const ThesisWriting = () => {
         return [...prev, newSection];
       });
 
-      toast.success(`Section "${sectionTitle}" générée`);
-      
-      // Auto-save after generation
+      toast.success("Discussion générée");
       setTimeout(() => saveProject(), 500);
     } catch (error: any) {
       console.error('Error:', error);
@@ -359,11 +562,52 @@ const ThesisWriting = () => {
     }
   };
 
-  const generateAllIntroduction = async () => {
-    for (const section of introductionSections) {
-      await generateSection(section.id);
+  // Generate Conclusion
+  const generateConclusion = async () => {
+    setIsLoading(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
+        body: { 
+          action: 'generate_conclusion', 
+          topic,
+          context: { 
+            domain, 
+            population, 
+            objective: `Étude sur ${topic}`
+          }
+        }
+      });
+
+      if (error) throw error;
+      
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      const content = data.content || '';
+      
+      setGeneratedSections(prev => {
+        const existing = prev.findIndex(s => s.id === 'conclusion');
+        const newSection = { id: 'conclusion', title: 'Conclusion', content };
+        
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = newSection;
+          return updated;
+        }
+        return [...prev, newSection];
+      });
+
+      toast.success("Conclusion générée");
+      setTimeout(() => saveProject(), 500);
+    } catch (error: any) {
+      console.error('Error:', error);
+      toast.error(error.message || "Erreur lors de la génération");
+    } finally {
+      setIsLoading(false);
     }
-    toast.success("Introduction complète générée!");
   };
 
   const updateSectionContent = (sectionId: string, newContent: string) => {
@@ -373,17 +617,29 @@ const ThesisWriting = () => {
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text.replace(/<[^>]*>/g, ''));
     toast.success("Copié dans le presse-papiers");
   };
 
   const handleExportWord = async () => {
     try {
       await exportToWord(generatedSections, topic, bibliography, citationFormat);
-      toast.success("Document Word exporté avec formatage académique");
+      toast.success("Document Word exporté");
     } catch (error) {
       console.error('Export error:', error);
       toast.error("Erreur lors de l'export");
+    }
+  };
+
+  const getCurrentSection = () => {
+    switch (step) {
+      case 2: return generatedSections.find(s => s.id === 'introduction');
+      case 3: return generatedSections.find(s => s.id === 'theoretical');
+      case 4: return generatedSections.find(s => s.id === 'methodology');
+      case 5: return generatedSections.find(s => s.id === 'results');
+      case 6: return generatedSections.find(s => s.id === 'discussion');
+      case 7: return generatedSections.find(s => s.id === 'conclusion');
+      default: return null;
     }
   };
 
@@ -431,7 +687,7 @@ const ThesisWriting = () => {
                           <div className="flex-1">
                             <p className="font-medium line-clamp-1">{project.topic}</p>
                             <p className="text-xs text-muted-foreground">
-                              Étape {project.current_step}/5 • {new Date(project.updated_at).toLocaleDateString('fr-FR')}
+                              Étape {project.current_step}/7 • {new Date(project.updated_at).toLocaleDateString('fr-FR')}
                             </p>
                           </div>
                           <Button 
@@ -486,583 +742,332 @@ const ThesisWriting = () => {
             Rédaction de Thèse / Mémoire
           </h1>
           <p className="text-xl text-muted-foreground">
-            {currentProject ? `Projet: ${topic.substring(0, 50)}...` : 'Générez automatiquement les sections de votre travail scientifique'}
+            {currentProject ? `Projet: ${topic.substring(0, 50)}...` : 'Entrez votre sujet et laissez l\'IA générer votre travail'}
           </p>
         </div>
 
         {/* Progress Steps */}
         <div className="flex justify-center mb-8 overflow-x-auto pb-2">
-          <div className="flex items-center gap-2 md:gap-4">
-            {[
-              { num: 1, label: "Sujet" },
-              { num: 2, label: "Type d'étude" },
-              { num: 3, label: "Informations" },
-              { num: 4, label: "Introduction" },
-              { num: 5, label: "Partie théorique" },
-            ].map((s, i) => (
-              <div key={s.num} className="flex items-center">
-                <button
-                  onClick={() => {
-                    if (s.num <= step || (s.num === 2 && studyType)) {
-                      setStep(s.num);
-                    }
-                  }}
-                  className={`flex items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full font-bold transition-colors ${
-                    step >= s.num ? 'bg-primary text-primary-foreground cursor-pointer' : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {step > s.num ? <CheckCircle className="w-4 h-4 md:w-5 md:h-5" /> : s.num}
-                </button>
-                <span className={`ml-1 md:ml-2 text-xs md:text-sm hidden sm:inline ${step >= s.num ? 'text-foreground' : 'text-muted-foreground'}`}>
-                  {s.label}
-                </span>
-                {i < 4 && <ArrowRight className="w-3 h-3 md:w-4 md:h-4 mx-1 md:mx-4 text-muted-foreground" />}
-              </div>
-            ))}
+          <div className="flex items-center gap-1 md:gap-2">
+            {stepLabels.map((s, i) => {
+              const Icon = s.icon;
+              return (
+                <div key={s.num} className="flex items-center">
+                  <button
+                    onClick={() => {
+                      if (s.num <= step || (s.num === 2 && generatedSections.some(sec => sec.id === 'introduction'))) {
+                        setStep(s.num);
+                      }
+                    }}
+                    className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-full font-bold transition-colors ${
+                      step >= s.num ? 'bg-primary text-primary-foreground cursor-pointer' : 'bg-muted text-muted-foreground'
+                    } ${step === s.num ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+                  >
+                    {step > s.num ? (
+                      <CheckCircle className="w-5 h-5" />
+                    ) : (
+                      <Icon className="w-5 h-5" />
+                    )}
+                  </button>
+                  <span className={`ml-1 text-xs hidden lg:inline ${step >= s.num ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    {s.label}
+                  </span>
+                  {i < stepLabels.length - 1 && (
+                    <ArrowRight className="w-3 h-3 mx-1 md:mx-2 text-muted-foreground" />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Step 1: Topic Input */}
+        {/* Step 1: Topic Input - Simplified */}
         {step === 1 && (
           <Card className="max-w-2xl mx-auto">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-primary" />
-                Étape 1: Entrez votre sujet de recherche
+                Entrez votre sujet de recherche
               </CardTitle>
               <CardDescription>
-                L'IA va identifier le type d'étude approprié pour votre sujet
+                L'IA va générer directement l'introduction complète (4+ pages) de votre mémoire
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Sujet de recherche / Titre du mémoire</Label>
+                <Label>Sujet de recherche / Titre du mémoire *</Label>
                 <Textarea 
-                  placeholder="Ex: Pré-éclampsie à la maternité de l'HGPR Jason Sendwe : Prévalence, épidémiologie et complications"
+                  placeholder="Ex: Pré-éclampsie à la maternité de l'HGPR Janson Sendwe : Prévalence, profil épidémiologique et issues materno-fœtales"
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                   className="min-h-[100px]"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Domaine</Label>
-                <Input 
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  placeholder="Médecine, Gynécologie-Obstétrique, etc."
-                />
+              
+              <Separator />
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Domaine</Label>
+                  <Input 
+                    value={domain}
+                    onChange={(e) => setDomain(e.target.value)}
+                    placeholder="Médecine, Gynécologie-Obstétrique..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Lieu d'étude</Label>
+                  <Input 
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Ex: HGPR Janson Sendwe, Lubumbashi"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Population d'étude</Label>
+                  <Input 
+                    value={population}
+                    onChange={(e) => setPopulation(e.target.value)}
+                    placeholder="Ex: Gestantes avec pré-éclampsie"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Période d'étude</Label>
+                  <Input 
+                    value={period}
+                    onChange={(e) => setPeriod(e.target.value)}
+                    placeholder="Ex: Janvier 2023 - Décembre 2023"
+                  />
+                </div>
               </div>
+              
+              {isLoading && generationProgress > 0 && (
+                <div className="space-y-2">
+                  <Progress value={generationProgress} className="h-2" />
+                  <p className="text-sm text-center text-muted-foreground">
+                    Génération de l'introduction en cours...
+                  </p>
+                </div>
+              )}
+              
               <Button 
-                onClick={identifyStudyType} 
+                onClick={generateIntroduction} 
                 disabled={isLoading || !topic.trim()}
                 className="w-full"
                 size="lg"
               >
                 {isLoading ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyse en cours...</>
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Génération en cours...</>
                 ) : (
-                  <><Sparkles className="w-4 h-4 mr-2" /> Identifier le type d'étude</>
+                  <><Sparkles className="w-4 h-4 mr-2" /> Générer l'Introduction (4+ pages)</>
                 )}
               </Button>
             </CardContent>
           </Card>
         )}
 
-        {/* Step 2: Study Type Confirmation */}
-        {step === 2 && studyType && (
-          <Card className="max-w-2xl mx-auto">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileSearch className="w-5 h-5 text-primary" />
-                Étape 2: Type d'étude identifié
-              </CardTitle>
-              <CardDescription>
-                Confirmez ou modifiez le type d'étude suggéré
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                <h3 className="font-bold text-lg text-primary mb-2">{studyType.studyType}</h3>
-                <p className="text-muted-foreground">{studyType.justification}</p>
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-2">Caractéristiques:</h4>
-                <div className="flex flex-wrap gap-2">
-                  {studyType.characteristics.map((char, i) => (
-                    <Badge key={i} variant="secondary">{char}</Badge>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              <div>
-                <h4 className="font-semibold mb-2">Objectifs suggérés:</h4>
-                <div className="space-y-2">
-                  <p><strong>Général:</strong> {studyType.suggestedObjectives.general}</p>
-                  <div>
-                    <strong>Spécifiques:</strong>
-                    <ul className="list-disc list-inside mt-1 space-y-1">
-                      {studyType.suggestedObjectives.specific.map((obj, i) => (
-                        <li key={i} className="text-muted-foreground">{obj}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Modifier le sujet
-                </Button>
-                <Button onClick={() => { setStudyTypeApproved(true); setStep(3); saveProject(); }} className="flex-1">
-                  Approuver et continuer <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Step 3: Additional Information */}
-        {step === 3 && (
-          <Card className="max-w-2xl mx-auto">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-primary" />
-                Étape 3: Informations complémentaires
-              </CardTitle>
-              <CardDescription>
-                Ces informations enrichiront la génération du contenu
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Population d'étude</Label>
-                <Input 
-                  value={population}
-                  onChange={(e) => setPopulation(e.target.value)}
-                  placeholder="Ex: Gestantes avec pré-éclampsie"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Période d'étude</Label>
-                <Input 
-                  value={period}
-                  onChange={(e) => setPeriod(e.target.value)}
-                  placeholder="Ex: Du 1er janvier 2022 au 31 décembre 2022"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Lieu d'étude</Label>
-                <Input 
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Ex: Maternité de l'HGPR Jason Sendwe, Lubumbashi"
-                />
-              </div>
-
-              <div className="flex gap-4 pt-4">
-                <Button variant="outline" onClick={() => setStep(2)} className="flex-1">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Retour
-                </Button>
-                <Button onClick={() => { setStep(4); saveProject(); }} className="flex-1">
-                  Générer l'introduction <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Step 4: Introduction Generation */}
-        {step === 4 && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Sections Panel */}
+        {/* Steps 2-7: Section Editor */}
+        {step >= 2 && (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Sidebar */}
             <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="text-lg">Sections de l'Introduction</CardTitle>
-                <CardDescription>Générez et éditez chaque section</CardDescription>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Sections</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {introductionSections.map((section) => {
-                  const isGenerated = generatedSections.some(s => s.id === section.id);
-                  const Icon = section.icon;
-                  return (
-                    <div key={section.id} className="space-y-1">
-                      <Button
-                        variant={isGenerated ? "secondary" : "outline"}
-                        className="w-full justify-start h-auto py-2"
-                        onClick={() => generateSection(section.id)}
-                        disabled={isLoading}
-                      >
-                        <Icon className="w-4 h-4 mr-2 flex-shrink-0" />
-                        <div className="text-left flex-1">
-                          <div className="font-medium">{section.title}</div>
-                          <div className="text-xs text-muted-foreground font-normal">{section.description}</div>
-                        </div>
-                        {isGenerated && <CheckCircle className="w-4 h-4 ml-2 text-primary flex-shrink-0" />}
-                      </Button>
-                    </div>
-                  );
-                })}
-
-                <Separator className="my-4" />
-
-                <Button 
-                  onClick={generateAllIntroduction} 
-                  disabled={isLoading}
-                  className="w-full"
-                >
-                  {isLoading ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Génération...</>
-                  ) : (
-                    <><Sparkles className="w-4 h-4 mr-2" /> Générer tout</>
-                  )}
-                </Button>
-
-                <Button 
-                  variant={showReferences ? "secondary" : "outline"} 
-                  onClick={() => setShowReferences(!showReferences)} 
-                  className="w-full"
-                >
-                  <BookMarked className="w-4 h-4 mr-2" />
-                  Références ({bibliography.length})
-                </Button>
-
-                {generatedSections.length > 0 && (
-                  <Button onClick={handleExportWord} variant="outline" className="w-full">
-                    <FileType className="w-4 h-4 mr-2" /> Export Word
-                  </Button>
-                )}
-
-                <Button variant="outline" onClick={() => { setStep(5); saveProject(); }} className="w-full">
-                  Partie théorique <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* References Panel (when shown) */}
-            {showReferences && (
-              <Card className="lg:col-span-2">
-                <CardContent className="pt-6">
-                  <ReferenceManager
-                    references={bibliography}
-                    onReferencesChange={(refs) => {
-                      setBibliography(refs);
-                      setTimeout(() => saveProject(), 500);
-                    }}
-                    citationFormat={citationFormat}
-                    onFormatChange={(format) => {
-                      setCitationFormat(format);
-                      setTimeout(() => saveProject(), 500);
-                    }}
-                  />
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Generated Content with Editor */}
-            {!showReferences && (
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>Contenu généré</span>
+                <Tabs value={showReferences ? 'refs' : 'sections'} onValueChange={(v) => setShowReferences(v === 'refs')}>
+                  <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="sections">Sections</TabsTrigger>
+                    <TabsTrigger value="refs">Réf. ({bibliography.length})</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="sections" className="space-y-2">
+                    {/* Section buttons */}
+                    {[
+                      { id: 'introduction', step: 2, label: 'Introduction', action: generateIntroduction },
+                      { id: 'theoretical', step: 3, label: 'Partie Théorique', action: generateTheoretical },
+                      { id: 'methodology', step: 4, label: 'Méthodologie', action: generateMethodology },
+                      { id: 'results', step: 5, label: 'Résultats', action: analyzeDataAndGenerateResults },
+                      { id: 'discussion', step: 6, label: 'Discussion', action: generateDiscussion },
+                      { id: 'conclusion', step: 7, label: 'Conclusion', action: generateConclusion },
+                    ].map((section) => {
+                      const hasContent = generatedSections.some(s => s.id === section.id);
+                      return (
+                        <Button
+                          key={section.id}
+                          variant={step === section.step ? 'default' : hasContent ? 'secondary' : 'outline'}
+                          className="w-full justify-start"
+                          onClick={() => setStep(section.step)}
+                        >
+                          {hasContent && <CheckCircle className="w-4 h-4 mr-2 text-green-500" />}
+                          {section.label}
+                        </Button>
+                      );
+                    })}
+                    
+                    <Separator className="my-4" />
+                    
                     {generatedSections.length > 0 && (
-                      <Badge>{generatedSections.length}/{introductionSections.length} sections</Badge>
+                      <Button onClick={handleExportWord} variant="outline" className="w-full">
+                        <FileType className="w-4 h-4 mr-2" /> Export Word
+                      </Button>
                     )}
-                  </CardTitle>
-                  <CardDescription>
-                    Cliquez sur "Modifier" pour éditer une section comme dans Word
-                  </CardDescription>
-                </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[600px] pr-4">
-                  {generatedSections.length === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                      <p>Cliquez sur une section pour la générer</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      {generatedSections.map((section) => (
-                        <div key={section.id} className="border rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <h3 className="font-bold text-lg">{section.title}</h3>
-                            <div className="flex gap-2">
-                              <Button 
-                                size="sm" 
-                                variant={editingSectionId === section.id ? "secondary" : "ghost"}
-                                onClick={() => setEditingSectionId(
-                                  editingSectionId === section.id ? null : section.id
-                                )}
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="ghost"
-                                onClick={() => copyToClipboard(section.content)}
-                              >
-                                <Copy className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          {editingSectionId === section.id ? (
-                            <div className="space-y-2">
-                              <RichTextEditor
-                                content={section.content}
-                                onChange={(content) => updateSectionContent(section.id, content)}
-                              />
-                              <Button 
-                                size="sm" 
-                                onClick={() => {
-                                  setEditingSectionId(null);
-                                  saveProject();
-                                }}
-                              >
-                                <Save className="w-4 h-4 mr-2" /> Enregistrer
-                              </Button>
-                            </div>
-                          ) : (
-                            <div 
-                              className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap"
-                              style={{ fontFamily: '"Times New Roman", Times, serif', lineHeight: 1.5 }}
-                            >
-                              {section.content}
-                            </div>
-                          )}
-                          
-                          {section.references && section.references.length > 0 && (
-                            <div className="mt-4 pt-4 border-t">
-                              <p className="text-sm font-medium mb-2">Références utilisées:</p>
-                              <ul className="text-xs text-muted-foreground space-y-1">
-                                {section.references.map((ref, i) => (
-                                  <li key={i}>• {ref}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </ScrollArea>
+                  </TabsContent>
+                  
+                  <TabsContent value="refs">
+                    <ReferenceManager
+                      references={bibliography}
+                      onReferencesChange={(refs) => {
+                        setBibliography(refs);
+                        setTimeout(() => saveProject(), 500);
+                      }}
+                      citationFormat={citationFormat}
+                      onFormatChange={(format) => {
+                        setCitationFormat(format);
+                        setTimeout(() => saveProject(), 500);
+                      }}
+                    />
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
-            )}
-          </div>
-        )}
 
-        {/* Step 5: Full Document Generation */}
-        {step === 5 && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Sections Panel */}
-            <Card className="lg:col-span-1">
+            {/* Main Content */}
+            <Card className="lg:col-span-3">
               <CardHeader>
-                <CardTitle className="text-lg">Sections du Mémoire</CardTitle>
-                <CardDescription>Générez toutes les parties de votre travail</CardDescription>
+                <CardTitle className="flex items-center justify-between">
+                  <span>{stepLabels[step - 1]?.label || 'Section'}</span>
+                  <div className="flex gap-2">
+                    {step > 1 && (
+                      <Button variant="outline" size="sm" onClick={() => setStep(step - 1)}>
+                        <ArrowLeft className="w-4 h-4 mr-1" /> Précédent
+                      </Button>
+                    )}
+                    {step < 7 && (
+                      <Button variant="outline" size="sm" onClick={() => setStep(step + 1)}>
+                        Suivant <ArrowRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    )}
+                  </div>
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Theoretical Part */}
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-muted-foreground">Partie Théorique</h4>
-                  <Button
-                    variant={generatedSections.some(s => s.id === 'theoretical_part') ? "secondary" : "outline"}
-                    className="w-full justify-start h-auto py-2"
-                    onClick={() => generateSection('theoretical_part')}
-                    disabled={isLoading}
-                  >
-                    <BookText className="w-4 h-4 mr-2 flex-shrink-0" />
-                    <div className="text-left flex-1">
-                      <div className="font-medium">Généralités / Revue de littérature</div>
-                      <div className="text-xs text-muted-foreground font-normal">Définitions, épidémiologie, physiopathologie...</div>
+              <CardContent>
+                {/* Step 5 special: Excel upload for results */}
+                {step === 5 && (
+                  <div className="mb-4 p-4 border rounded-lg bg-muted/30 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="w-5 h-5 text-primary" />
+                      <Label className="font-semibold">Téléversez votre base de données</Label>
                     </div>
-                    {generatedSections.some(s => s.id === 'theoretical_part') && 
-                      <CheckCircle className="w-4 h-4 ml-2 text-primary flex-shrink-0" />
-                    }
-                  </Button>
-                </div>
-
-                {/* Methodology */}
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-muted-foreground">Méthodologie</h4>
-                  {methodologySections.map((section) => {
-                    const isGenerated = generatedSections.some(s => s.id === section.id);
-                    const Icon = section.icon;
-                    return (
-                      <Button
-                        key={section.id}
-                        variant={isGenerated ? "secondary" : "outline"}
-                        className="w-full justify-start h-auto py-2"
-                        onClick={() => generateSection(section.id)}
-                        disabled={isLoading}
+                    <p className="text-sm text-muted-foreground">
+                      Téléversez votre fichier Excel ou CSV, l'IA analysera les données et générera les résultats
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleExcelUpload}
+                        accept=".csv,.xlsx,.xls"
+                        className="hidden"
+                      />
+                      <Button 
+                        variant="outline" 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex-1"
                       >
-                        <Icon className="w-4 h-4 mr-2 flex-shrink-0" />
-                        <div className="text-left flex-1">
-                          <div className="font-medium">{section.title}</div>
-                          <div className="text-xs text-muted-foreground font-normal">{section.description}</div>
-                        </div>
-                        {isGenerated && <CheckCircle className="w-4 h-4 ml-2 text-primary flex-shrink-0" />}
+                        <Upload className="w-4 h-4 mr-2" />
+                        {excelData ? `${excelData.rowCount} lignes chargées` : 'Téléverser Excel/CSV'}
                       </Button>
-                    );
-                  })}
-                </div>
-
-                {/* Results & Discussion */}
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-muted-foreground">Résultats & Discussion</h4>
-                  {resultsSections.map((section) => {
-                    const isGenerated = generatedSections.some(s => s.id === section.id);
-                    const Icon = section.icon;
-                    return (
-                      <Button
-                        key={section.id}
-                        variant={isGenerated ? "secondary" : "outline"}
-                        className="w-full justify-start h-auto py-2"
-                        onClick={() => generateSection(section.id)}
-                        disabled={isLoading}
-                      >
-                        <Icon className="w-4 h-4 mr-2 flex-shrink-0" />
-                        <div className="text-left flex-1">
-                          <div className="font-medium">{section.title}</div>
-                          <div className="text-xs text-muted-foreground font-normal">{section.description}</div>
-                        </div>
-                        {isGenerated && <CheckCircle className="w-4 h-4 ml-2 text-primary flex-shrink-0" />}
-                      </Button>
-                    );
-                  })}
-                </div>
-
-                <Separator className="my-4" />
-
-                <Button 
-                  variant={showReferences ? "secondary" : "outline"} 
-                  onClick={() => setShowReferences(!showReferences)} 
-                  className="w-full"
-                >
-                  <BookMarked className="w-4 h-4 mr-2" />
-                  Références ({bibliography.length})
-                </Button>
-
-                {generatedSections.length > 0 && (
-                  <Button onClick={handleExportWord} variant="outline" className="w-full">
-                    <FileType className="w-4 h-4 mr-2" /> Export Word
-                  </Button>
+                      {excelData && (
+                        <Button onClick={analyzeDataAndGenerateResults} disabled={isLoading}>
+                          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4 mr-2" />}
+                          Analyser
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 )}
 
-                <Button variant="outline" onClick={() => setStep(4)} className="w-full">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> Retour à l'Introduction
-                </Button>
-              </CardContent>
-            </Card>
+                {/* Generation button for current step */}
+                {!getCurrentSection() && step !== 5 && (
+                  <div className="text-center py-12">
+                    <p className="text-muted-foreground mb-4">
+                      Cette section n'a pas encore été générée
+                    </p>
+                    <Button 
+                      onClick={() => {
+                        switch (step) {
+                          case 2: generateIntroduction(); break;
+                          case 3: generateTheoretical(); break;
+                          case 4: generateMethodology(); break;
+                          case 6: generateDiscussion(); break;
+                          case 7: generateConclusion(); break;
+                        }
+                      }}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                      Générer cette section
+                    </Button>
+                  </div>
+                )}
 
-            {/* References Panel (when shown) */}
-            {showReferences && (
-              <Card className="lg:col-span-2">
-                <CardContent className="pt-6">
-                  <ReferenceManager
-                    references={bibliography}
-                    onReferencesChange={(refs) => {
-                      setBibliography(refs);
-                      setTimeout(() => saveProject(), 500);
-                    }}
-                    citationFormat={citationFormat}
-                    onFormatChange={(format) => {
-                      setCitationFormat(format);
-                      setTimeout(() => saveProject(), 500);
-                    }}
-                  />
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Generated Content */}
-            {!showReferences && (
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>Contenu généré</span>
-                    {generatedSections.length > 0 && (
-                      <Badge variant="secondary">{generatedSections.length} sections</Badge>
-                    )}
-                  </CardTitle>
-                  <CardDescription>
-                    Sections générées pour la partie pratique
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[600px] pr-4">
-                    {generatedSections.filter(s => 
-                      ['theoretical_part', 'methodology', 'results', 'discussion', 'conclusion'].includes(s.id)
-                    ).length === 0 ? (
-                      <div className="text-center py-12 text-muted-foreground">
-                        <FlaskConical className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                        <p>Cliquez sur une section pour la générer</p>
-                        <p className="text-sm mt-2">
-                          Conseil: Générez d'abord les "Généralités" puis la "Méthodologie"
-                        </p>
+                {/* Display generated content */}
+                {getCurrentSection() && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="secondary">
+                        {getCurrentSection()?.content.split(' ').length || 0} mots
+                      </Badge>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant={editingSectionId === getCurrentSection()?.id ? 'secondary' : 'ghost'}
+                          onClick={() => setEditingSectionId(
+                            editingSectionId === getCurrentSection()?.id ? null : getCurrentSection()?.id || null
+                          )}
+                        >
+                          <Edit3 className="w-4 h-4 mr-1" />
+                          {editingSectionId === getCurrentSection()?.id ? 'Aperçu' : 'Modifier'}
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          onClick={() => copyToClipboard(getCurrentSection()?.content || '')}
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {editingSectionId === getCurrentSection()?.id ? (
+                      <div className="space-y-2">
+                        <RichTextEditor
+                          content={getCurrentSection()?.content || ''}
+                          onChange={(content) => updateSectionContent(getCurrentSection()?.id || '', content)}
+                        />
+                        <Button 
+                          onClick={() => {
+                            setEditingSectionId(null);
+                            saveProject();
+                          }}
+                        >
+                          <Save className="w-4 h-4 mr-2" /> Enregistrer
+                        </Button>
                       </div>
                     ) : (
-                      <div className="space-y-6">
-                        {generatedSections
-                          .filter(s => ['theoretical_part', 'methodology', 'results', 'discussion', 'conclusion'].includes(s.id))
-                          .map((section) => (
-                          <div key={section.id} className="border rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <h3 className="font-bold text-lg">{section.title}</h3>
-                              <div className="flex gap-2">
-                                <Button 
-                                  size="sm" 
-                                  variant={editingSectionId === section.id ? "secondary" : "ghost"}
-                                  onClick={() => setEditingSectionId(
-                                    editingSectionId === section.id ? null : section.id
-                                  )}
-                                >
-                                  <Edit3 className="w-4 h-4" />
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost"
-                                  onClick={() => copyToClipboard(section.content)}
-                                >
-                                  <Copy className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
-                            
-                            {editingSectionId === section.id ? (
-                              <div className="space-y-2">
-                                <RichTextEditor
-                                  content={section.content}
-                                  onChange={(content) => updateSectionContent(section.id, content)}
-                                />
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => {
-                                    setEditingSectionId(null);
-                                    saveProject();
-                                  }}
-                                >
-                                  <Save className="w-4 h-4 mr-2" /> Enregistrer
-                                </Button>
-                              </div>
-                            ) : (
-                              <div 
-                                className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap"
-                                style={{ fontFamily: '"Times New Roman", Times, serif', lineHeight: 1.5 }}
-                              >
-                                {section.content}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                      <ScrollArea className="h-[500px] border rounded-lg p-4">
+                        <div 
+                          className="prose prose-sm max-w-none dark:prose-invert"
+                          style={{ fontFamily: '"Times New Roman", Times, serif', lineHeight: 1.5 }}
+                          dangerouslySetInnerHTML={{ __html: getCurrentSection()?.content || '' }}
+                        />
+                      </ScrollArea>
                     )}
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
       </main>

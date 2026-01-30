@@ -9,9 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Plus, Trash2, Copy, BookOpen, FileText, Globe, 
-  Users, Calendar, BookMarked, Edit2, Check, X
+  Users, Calendar, BookMarked, Edit2, Check, X, Search, Loader2, Download
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export type ReferenceType = 'article' | 'book' | 'chapter' | 'website' | 'thesis';
 export type CitationFormat = 'apa' | 'vancouver';
@@ -35,6 +36,7 @@ export interface Reference {
   editors?: string[];
   bookTitle?: string;
   university?: string;
+  pmid?: string;
 }
 
 interface ReferenceManagerProps {
@@ -216,6 +218,14 @@ const ReferenceManager = ({
 }: ReferenceManagerProps) => {
   const [editingRef, setEditingRef] = useState<Reference | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [activeTab, setActiveTab] = useState('list');
+  
+  // DOI/PubMed import states
+  const [doiInput, setDoiInput] = useState('');
+  const [pubmedQuery, setPubmedQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<Reference[]>([]);
+  
   const [newRef, setNewRef] = useState<Partial<Reference>>({
     type: 'article',
     authors: [''],
@@ -237,6 +247,84 @@ const ReferenceManager = ({
     chapter: 'Chapitre de livre',
     website: 'Site web',
     thesis: 'Thèse',
+  };
+
+  // Fetch reference from DOI
+  const fetchFromDOI = async () => {
+    if (!doiInput.trim()) {
+      toast.error("Veuillez entrer un DOI");
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
+        body: { action: 'fetch_doi', doi: doiInput.trim() }
+      });
+
+      if (error) throw error;
+      
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      if (data.reference) {
+        onReferencesChange([...references, data.reference]);
+        setDoiInput('');
+        toast.success("Référence importée depuis DOI");
+      }
+    } catch (error: any) {
+      console.error('DOI fetch error:', error);
+      toast.error("Erreur lors de l'import du DOI");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Search PubMed
+  const searchPubMed = async () => {
+    if (!pubmedQuery.trim()) {
+      toast.error("Veuillez entrer une recherche");
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchResults([]);
+    try {
+      const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
+        body: { action: 'search_pubmed', pubmedQuery: pubmedQuery.trim() }
+      });
+
+      if (error) throw error;
+      
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      if (data.references && data.references.length > 0) {
+        setSearchResults(data.references);
+        toast.success(`${data.references.length} références trouvées`);
+      } else {
+        toast.info("Aucune référence trouvée");
+      }
+    } catch (error: any) {
+      console.error('PubMed search error:', error);
+      toast.error("Erreur lors de la recherche PubMed");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const addSearchResult = (ref: Reference) => {
+    // Check if already added
+    if (references.some(r => r.pmid === ref.pmid || (ref.doi && r.doi === ref.doi))) {
+      toast.info("Cette référence est déjà dans votre liste");
+      return;
+    }
+    onReferencesChange([...references, { ...ref, id: crypto.randomUUID() }]);
+    toast.success("Référence ajoutée");
   };
 
   const addReference = () => {
@@ -340,16 +428,86 @@ const ReferenceManager = ({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Tabs defaultValue="list">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="list">Liste</TabsTrigger>
-            <TabsTrigger value="formatted">Aperçu formaté</TabsTrigger>
+            <TabsTrigger value="import">Import DOI</TabsTrigger>
+            <TabsTrigger value="pubmed">PubMed</TabsTrigger>
+            <TabsTrigger value="formatted">Aperçu</TabsTrigger>
           </TabsList>
+
+          {/* Import DOI Tab */}
+          <TabsContent value="import" className="space-y-4">
+            <div className="space-y-3">
+              <Label>Importer depuis DOI</Label>
+              <p className="text-sm text-muted-foreground">
+                Entrez un DOI pour importer automatiquement les informations de la référence
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={doiInput}
+                  onChange={(e) => setDoiInput(e.target.value)}
+                  placeholder="10.1016/j.xxx.2023.xxx ou https://doi.org/..."
+                  className="flex-1"
+                />
+                <Button onClick={fetchFromDOI} disabled={isSearching}>
+                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* PubMed Search Tab */}
+          <TabsContent value="pubmed" className="space-y-4">
+            <div className="space-y-3">
+              <Label>Rechercher sur PubMed</Label>
+              <p className="text-sm text-muted-foreground">
+                Recherchez des articles sur PubMed et importez-les directement
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={pubmedQuery}
+                  onChange={(e) => setPubmedQuery(e.target.value)}
+                  placeholder="ex: preeclampsia africa 2023"
+                  className="flex-1"
+                  onKeyDown={(e) => e.key === 'Enter' && searchPubMed()}
+                />
+                <Button onClick={searchPubMed} disabled={isSearching}>
+                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                </Button>
+              </div>
+            </div>
+
+            {searchResults.length > 0 && (
+              <ScrollArea className="h-[300px] border rounded-lg p-3">
+                <div className="space-y-3">
+                  {searchResults.map((ref, index) => (
+                    <div key={ref.id || index} className="p-3 border rounded-lg bg-muted/30 space-y-2">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm line-clamp-2">{ref.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {ref.authors?.slice(0, 3).join(', ')}{ref.authors && ref.authors.length > 3 ? ' et al.' : ''} ({ref.year})
+                          </p>
+                          {ref.journal && (
+                            <p className="text-xs text-muted-foreground italic">{ref.journal}</p>
+                          )}
+                        </div>
+                        <Button size="sm" onClick={() => addSearchResult(ref)}>
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </TabsContent>
 
           <TabsContent value="list" className="space-y-3">
             {!showForm ? (
               <Button onClick={() => setShowForm(true)} className="w-full" variant="outline">
-                <Plus className="w-4 h-4 mr-2" /> Ajouter une référence
+                <Plus className="w-4 h-4 mr-2" /> Ajouter manuellement
               </Button>
             ) : (
               <Card className="p-4 space-y-4 bg-muted/30">
@@ -507,17 +665,13 @@ const ReferenceManager = ({
                   </div>
                 )}
 
-                <div className="flex gap-2 pt-2">
-                  <Button onClick={addReference} className="flex-1">
-                    <Check className="w-4 h-4 mr-2" /> Ajouter
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowForm(false)}>
-                    Annuler
-                  </Button>
-                </div>
+                <Button onClick={addReference} className="w-full">
+                  <Check className="w-4 h-4 mr-2" /> Ajouter la référence
+                </Button>
               </Card>
             )}
 
+            {/* Reference List */}
             <ScrollArea className="h-[300px]">
               <div className="space-y-2">
                 {references.length === 0 ? (
@@ -525,38 +679,23 @@ const ReferenceManager = ({
                     Aucune référence ajoutée
                   </p>
                 ) : (
-                  references.map((ref, i) => (
-                    <div 
-                      key={ref.id}
-                      className="flex items-start gap-2 p-3 border rounded-lg hover:bg-muted/50"
-                    >
+                  references.map((ref, index) => (
+                    <div key={ref.id} className="flex items-start gap-2 p-3 border rounded-lg hover:bg-muted/50">
                       <Badge variant="outline" className="shrink-0">
-                        {citationFormat === 'vancouver' ? i + 1 : typeIcons[ref.type]}
+                        {citationFormat === 'vancouver' ? index + 1 : typeIcons[ref.type]}
                       </Badge>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium line-clamp-1">{ref.title}</p>
                         <p className="text-xs text-muted-foreground">
-                          {ref.authors.join(', ')} ({ref.year})
+                          {ref.authors.slice(0, 2).join(', ')}{ref.authors.length > 2 ? ' et al.' : ''} ({ref.year})
                         </p>
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <Button 
-                          size="icon" 
-                          variant="ghost"
-                          onClick={() => {
-                            const citation = formatInTextCitation(ref, citationFormat, i + 1);
-                            navigator.clipboard.writeText(citation);
-                            toast.success(`Citation copiée: ${citation}`);
-                          }}
-                        >
-                          <Copy className="w-4 h-4" />
+                        <Button size="icon" variant="ghost" onClick={() => setEditingRef(ref)}>
+                          <Edit2 className="w-3 h-3" />
                         </Button>
-                        <Button 
-                          size="icon" 
-                          variant="ghost"
-                          onClick={() => deleteReference(ref.id)}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
+                        <Button size="icon" variant="ghost" onClick={() => deleteReference(ref.id)}>
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       </div>
                     </div>
@@ -567,35 +706,22 @@ const ReferenceManager = ({
           </TabsContent>
 
           <TabsContent value="formatted" className="space-y-3">
-            <div className="flex justify-between items-center">
-              <p className="text-sm text-muted-foreground">
-                {citationFormat === 'apa' ? 'Format APA 7e édition' : 'Style Vancouver (numéroté)'}
-              </p>
+            <div className="flex justify-end">
               <Button size="sm" variant="outline" onClick={copyFormattedReferences}>
                 <Copy className="w-4 h-4 mr-2" /> Copier tout
               </Button>
             </div>
-            <ScrollArea className="h-[350px]">
-              <div 
-                className="space-y-3 pr-4"
-                style={{ fontFamily: '"Times New Roman", Times, serif' }}
-              >
+            <ScrollArea className="h-[350px] border rounded-lg p-4">
+              <div className="space-y-3">
                 {references.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8">
                     Aucune référence à afficher
                   </p>
                 ) : (
                   references.map((ref, i) => (
-                    <p 
-                      key={ref.id} 
-                      className="text-sm leading-relaxed"
-                      style={{ 
-                        textIndent: citationFormat === 'apa' ? '-0.5in' : '0',
-                        paddingLeft: citationFormat === 'apa' ? '0.5in' : '0',
-                      }}
-                    >
+                    <div key={ref.id} className="text-sm leading-relaxed pb-2 border-b last:border-0">
                       {formatReference(ref, citationFormat, i + 1)}
-                    </p>
+                    </div>
                   ))
                 )}
               </div>
