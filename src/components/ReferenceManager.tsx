@@ -225,6 +225,8 @@ const ReferenceManager = ({
   const [pubmedQuery, setPubmedQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<Reference[]>([]);
+  const [doiPreview, setDoiPreview] = useState<Reference | null>(null);
+  const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set());
   
   const [newRef, setNewRef] = useState<Partial<Reference>>({
     type: 'article',
@@ -249,36 +251,69 @@ const ReferenceManager = ({
     thesis: 'Thèse',
   };
 
-  // Fetch reference from DOI
-  const fetchFromDOI = async () => {
+  // Fetch reference from DOI with preview
+  const fetchFromDOI = async (addDirectly = false) => {
     if (!doiInput.trim()) {
       toast.error("Veuillez entrer un DOI");
       return;
     }
 
     setIsSearching(true);
+    setDoiPreview(null);
     try {
-      const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
-        body: { action: 'fetch_doi', doi: doiInput.trim() }
-      });
-
-      if (error) throw error;
+      // Support multiple DOIs separated by newlines or commas
+      const dois = doiInput.split(/[\n,]/).map(d => d.trim()).filter(Boolean);
       
-      if (data.error) {
-        toast.error(data.error);
-        return;
-      }
+      for (const doi of dois) {
+        const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
+          body: { action: 'fetch_doi', doi: doi }
+        });
 
-      if (data.reference) {
-        onReferencesChange([...references, data.reference]);
+        if (error) throw error;
+        
+        if (data.error) {
+          toast.error(`DOI ${doi}: ${data.error}`);
+          continue;
+        }
+
+        if (data.reference) {
+          if (addDirectly || dois.length > 1) {
+            // Check for duplicates
+            if (!references.some(r => r.doi === data.reference.doi)) {
+              onReferencesChange([...references, data.reference]);
+              toast.success(`Référence importée: ${data.reference.title?.substring(0, 50)}...`);
+            } else {
+              toast.info(`DOI ${doi} déjà dans la liste`);
+            }
+          } else {
+            // Show preview for single DOI
+            setDoiPreview(data.reference);
+          }
+        }
+      }
+      
+      if (addDirectly || dois.length > 1) {
         setDoiInput('');
-        toast.success("Référence importée depuis DOI");
       }
     } catch (error: any) {
       console.error('DOI fetch error:', error);
       toast.error("Erreur lors de l'import du DOI");
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  // Add DOI preview to references
+  const addDoiPreview = () => {
+    if (doiPreview) {
+      if (!references.some(r => r.doi === doiPreview.doi)) {
+        onReferencesChange([...references, doiPreview]);
+        toast.success("Référence ajoutée");
+      } else {
+        toast.info("Cette référence est déjà dans la liste");
+      }
+      setDoiPreview(null);
+      setDoiInput('');
     }
   };
 
@@ -441,7 +476,7 @@ const ReferenceManager = ({
             <div className="space-y-3">
               <Label>Importer depuis DOI</Label>
               <p className="text-sm text-muted-foreground">
-                Entrez un DOI pour importer automatiquement les informations de la référence
+                Entrez un ou plusieurs DOI (séparés par des virgules ou retours à la ligne) pour importer automatiquement
               </p>
               <div className="flex gap-2">
                 <Input
@@ -449,12 +484,44 @@ const ReferenceManager = ({
                   onChange={(e) => setDoiInput(e.target.value)}
                   placeholder="10.1016/j.xxx.2023.xxx ou https://doi.org/..."
                   className="flex-1"
+                  onKeyDown={(e) => e.key === 'Enter' && fetchFromDOI(false)}
                 />
-                <Button onClick={fetchFromDOI} disabled={isSearching}>
+                <Button onClick={() => fetchFromDOI(false)} disabled={isSearching} title="Aperçu">
+                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                </Button>
+                <Button onClick={() => fetchFromDOI(true)} disabled={isSearching} variant="secondary" title="Ajouter directement">
                   {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                 </Button>
               </div>
             </div>
+
+            {/* DOI Preview */}
+            {doiPreview && (
+              <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1 space-y-1">
+                    <p className="font-medium">{doiPreview.title}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {doiPreview.authors?.join(', ')} ({doiPreview.year})
+                    </p>
+                    {doiPreview.journal && (
+                      <p className="text-sm italic text-muted-foreground">{doiPreview.journal}</p>
+                    )}
+                    {doiPreview.doi && (
+                      <p className="text-xs text-muted-foreground">DOI: {doiPreview.doi}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={addDoiPreview} className="flex-1">
+                    <Plus className="w-4 h-4 mr-2" /> Ajouter à la bibliographie
+                  </Button>
+                  <Button variant="outline" onClick={() => setDoiPreview(null)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           {/* PubMed Search Tab */}
@@ -462,7 +529,7 @@ const ReferenceManager = ({
             <div className="space-y-3">
               <Label>Rechercher sur PubMed</Label>
               <p className="text-sm text-muted-foreground">
-                Recherchez des articles sur PubMed et importez-les directement
+                Recherchez des articles sur PubMed et sélectionnez ceux à importer
               </p>
               <div className="flex gap-2">
                 <Input
@@ -479,28 +546,106 @@ const ReferenceManager = ({
             </div>
 
             {searchResults.length > 0 && (
-              <ScrollArea className="h-[300px] border rounded-lg p-3">
-                <div className="space-y-3">
-                  {searchResults.map((ref, index) => (
-                    <div key={ref.id || index} className="p-3 border rounded-lg bg-muted/30 space-y-2">
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex-1">
-                          <p className="font-medium text-sm line-clamp-2">{ref.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {ref.authors?.slice(0, 3).join(', ')}{ref.authors && ref.authors.length > 3 ? ' et al.' : ''} ({ref.year})
-                          </p>
-                          {ref.journal && (
-                            <p className="text-xs text-muted-foreground italic">{ref.journal}</p>
-                          )}
-                        </div>
-                        <Button size="sm" onClick={() => addSearchResult(ref)}>
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+              <>
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-muted-foreground">
+                    {searchResults.length} résultat(s) - {selectedResults.size} sélectionné(s)
+                  </p>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        if (selectedResults.size === searchResults.length) {
+                          setSelectedResults(new Set());
+                        } else {
+                          setSelectedResults(new Set(searchResults.map(r => r.id)));
+                        }
+                      }}
+                    >
+                      {selectedResults.size === searchResults.length ? 'Désélectionner tout' : 'Sélectionner tout'}
+                    </Button>
+                    <Button 
+                      size="sm"
+                      disabled={selectedResults.size === 0}
+                      onClick={() => {
+                        const toAdd = searchResults.filter(r => selectedResults.has(r.id));
+                        let addedCount = 0;
+                        const newRefs = [...references];
+                        toAdd.forEach(ref => {
+                          if (!newRefs.some(r => r.pmid === ref.pmid || (ref.doi && r.doi === ref.doi))) {
+                            newRefs.push({ ...ref, id: crypto.randomUUID() });
+                            addedCount++;
+                          }
+                        });
+                        onReferencesChange(newRefs);
+                        toast.success(`${addedCount} référence(s) ajoutée(s)`);
+                        setSelectedResults(new Set());
+                        setSearchResults([]);
+                        setPubmedQuery('');
+                      }}
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Ajouter ({selectedResults.size})
+                    </Button>
+                  </div>
                 </div>
-              </ScrollArea>
+                <ScrollArea className="h-[300px] border rounded-lg p-3">
+                  <div className="space-y-2">
+                    {searchResults.map((ref, index) => {
+                      const isSelected = selectedResults.has(ref.id);
+                      const isAlreadyAdded = references.some(r => r.pmid === ref.pmid || (ref.doi && r.doi === ref.doi));
+                      
+                      return (
+                        <div 
+                          key={ref.id || index} 
+                          className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                            isAlreadyAdded 
+                              ? 'bg-muted/20 opacity-50' 
+                              : isSelected 
+                                ? 'bg-primary/10 border-primary' 
+                                : 'bg-muted/30 hover:bg-muted/50'
+                          }`}
+                          onClick={() => {
+                            if (isAlreadyAdded) return;
+                            const newSelected = new Set(selectedResults);
+                            if (isSelected) {
+                              newSelected.delete(ref.id);
+                            } else {
+                              newSelected.add(ref.id);
+                            }
+                            setSelectedResults(newSelected);
+                          }}
+                        >
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex-1">
+                              <p className="font-medium text-sm line-clamp-2">{ref.title}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {ref.authors?.slice(0, 3).join(', ')}{ref.authors && ref.authors.length > 3 ? ' et al.' : ''} ({ref.year})
+                              </p>
+                              {ref.journal && (
+                                <p className="text-xs text-muted-foreground italic">{ref.journal}</p>
+                              )}
+                              {ref.pmid && (
+                                <p className="text-xs text-muted-foreground">PMID: {ref.pmid}</p>
+                              )}
+                            </div>
+                            {isAlreadyAdded ? (
+                              <Badge variant="secondary" className="text-xs">Déjà ajouté</Badge>
+                            ) : (
+                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                isSelected ? 'bg-primary border-primary' : 'border-muted-foreground'
+                              }`}>
+                                {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </>
             )}
           </TabsContent>
 
