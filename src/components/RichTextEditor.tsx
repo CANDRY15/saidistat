@@ -13,7 +13,7 @@ import {
   List, ListOrdered, Undo, Redo, Table as TableIcon, Image as ImageIcon, 
   Plus, Minus, Trash2, Rows, Columns
 } from 'lucide-react';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,15 +22,29 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import FigureManager, { Figure } from './FigureManager';
 
 interface RichTextEditorProps {
   content: string;
   onChange: (content: string) => void;
   className?: string;
+  figures?: Figure[];
+  onFiguresChange?: (figures: Figure[]) => void;
 }
 
-const RichTextEditor = ({ content, onChange, className }: RichTextEditorProps) => {
+const RichTextEditor = ({ content, onChange, className, figures = [], onFiguresChange }: RichTextEditorProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [localFigures, setLocalFigures] = useState<Figure[]>(figures);
+
+  // Sync with external figures
+  useEffect(() => {
+    setLocalFigures(figures);
+  }, [figures]);
+
+  const handleFiguresChange = useCallback((newFigures: Figure[]) => {
+    setLocalFigures(newFigures);
+    onFiguresChange?.(newFigures);
+  }, [onFiguresChange]);
   
   const editor = useEditor({
     extensions: [
@@ -155,6 +169,40 @@ const RichTextEditor = ({ content, onChange, className }: RichTextEditorProps) =
     if (url && editor) {
       editor.chain().focus().setImage({ src: url }).run();
     }
+  }, [editor]);
+
+  // Insert numbered figure with caption
+  const handleInsertFigure = useCallback((figure: Figure) => {
+    if (!editor) return;
+    
+    const figureHtml = `
+      <div class="numbered-figure" data-figure-id="${figure.id}">
+        <img src="${figure.content}" alt="${figure.caption}" class="thesis-figure-img" />
+        <p class="figure-caption">
+          <strong>Figure ${figure.number}:</strong> ${figure.caption}
+          ${figure.source ? `<br/><em>Source: ${figure.source}</em>` : ''}
+        </p>
+      </div>
+    `;
+    
+    editor.chain().focus().insertContent(figureHtml).run();
+  }, [editor]);
+
+  // Insert numbered table with caption
+  const handleInsertTable = useCallback((figure: Figure) => {
+    if (!editor) return;
+    
+    const tableHtml = `
+      <div class="numbered-table-container" data-table-id="${figure.id}">
+        <p class="table-caption">
+          <strong>Tableau ${figure.number}:</strong> ${figure.caption}
+        </p>
+        ${figure.content}
+        ${figure.source ? `<p class="table-source"><em>Source: ${figure.source}</em></p>` : ''}
+      </div>
+    `;
+    
+    editor.chain().focus().insertContent(tableHtml).run();
   }, [editor]);
 
   if (!editor) {
@@ -332,6 +380,19 @@ const RichTextEditor = ({ content, onChange, className }: RichTextEditorProps) =
         />
         
         <div className="w-px h-6 bg-border mx-1" />
+
+        {/* Numbered Figures and Tables */}
+        {onFiguresChange && (
+          <>
+            <FigureManager
+              figures={localFigures}
+              onFiguresChange={handleFiguresChange}
+              onInsertFigure={handleInsertFigure}
+              onInsertTable={handleInsertTable}
+            />
+            <div className="w-px h-6 bg-border mx-1" />
+          </>
+        )}
         
         {/* Undo/Redo */}
         <Button
@@ -359,7 +420,7 @@ const RichTextEditor = ({ content, onChange, className }: RichTextEditorProps) =
       {/* Editor */}
       <EditorContent editor={editor} className="bg-background" />
       
-      {/* Styles for tables and images */}
+      {/* Styles for tables, images, and numbered figures */}
       <style>{`
         .thesis-table {
           border-collapse: collapse;
@@ -421,6 +482,70 @@ const RichTextEditor = ({ content, onChange, className }: RichTextEditorProps) =
         }
         .ProseMirror img.ProseMirror-selectednode {
           outline: 3px solid hsl(var(--primary));
+        }
+        
+        /* Numbered figures styling */
+        .numbered-figure {
+          margin: 1.5rem 0;
+          text-align: center;
+          page-break-inside: avoid;
+        }
+        .thesis-figure-img {
+          max-width: 80%;
+          height: auto;
+          margin: 0 auto;
+          display: block;
+          border: 1px solid hsl(var(--border));
+        }
+        .figure-caption {
+          margin-top: 0.5rem;
+          font-size: 0.9em;
+          text-align: center;
+          font-style: normal;
+          color: hsl(var(--foreground));
+        }
+        .figure-caption strong {
+          font-weight: bold;
+        }
+        .figure-caption em {
+          font-size: 0.85em;
+          color: hsl(var(--muted-foreground));
+        }
+        
+        /* Numbered tables styling */
+        .numbered-table-container {
+          margin: 1.5rem 0;
+          page-break-inside: avoid;
+        }
+        .table-caption {
+          margin-bottom: 0.5rem;
+          font-size: 0.9em;
+          text-align: center;
+          font-style: normal;
+        }
+        .table-caption strong {
+          font-weight: bold;
+        }
+        .numbered-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 0 auto;
+        }
+        .numbered-table td,
+        .numbered-table th {
+          border: 1px solid hsl(var(--border));
+          padding: 0.5rem;
+          text-align: left;
+        }
+        .numbered-table th {
+          background-color: hsl(var(--muted));
+          font-weight: bold;
+        }
+        .table-source {
+          margin-top: 0.25rem;
+          font-size: 0.85em;
+          text-align: left;
+          color: hsl(var(--muted-foreground));
         }
       `}</style>
     </div>
