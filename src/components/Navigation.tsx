@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import saidistatLogo from "@/assets/saidistat-logo.jpg";
+import saidistatLogo from "@/assets/saidistat-logo-new.png";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut, LayoutDashboard, Menu, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
