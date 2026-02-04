@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { ArrowRight, Sparkles } from "lucide-react";
 import heroImage from "@/assets/hero-bg.jpg";
+import saidistatLogoNew from "@/assets/saidistat-logo-new.png";
 
 const Hero = () => {
   return (
