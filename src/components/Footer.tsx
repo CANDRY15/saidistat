@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Github, Linkedin, Mail } from "lucide-react";
-import saidistatLogo from "@/assets/saidistat-logo.jpg";
+import saidistatLogo from "@/assets/saidistat-logo-new.png";
 
 const Footer = () => {
   return (
