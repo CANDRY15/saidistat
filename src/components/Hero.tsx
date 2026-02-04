@@ -30,9 +30,13 @@ const Hero = () => {
             </span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold mb-4 sm:mb-6 bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent animate-fade-in-up">
-            SaidiStat
-          </h1>
+          <div className="flex justify-center mb-4 sm:mb-6 animate-fade-in-up">
+            <img 
+              src={saidistatLogoNew} 
+              alt="SaidiStat" 
+              className="h-24 sm:h-32 md:h-40 w-auto object-contain drop-shadow-xl"
+            />
+          </div>
 
           <p className="text-base sm:text-xl md:text-2xl text-muted-foreground mb-6 sm:mb-8 leading-relaxed px-2 animate-fade-in-up animation-delay-200">
             Votre assistant intelligent pour l'analyse statistique médicale et la rédaction scientifique

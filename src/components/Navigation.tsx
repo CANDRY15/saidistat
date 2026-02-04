@@ -47,12 +47,9 @@ const Navigation = () => {
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg group-hover:shadow-xl transition-shadow">
-              <img src={saidistatLogo} alt="SaidiStat Logo" className="w-full h-full object-cover" />
+            <div className="h-10 w-auto">
+              <img src={saidistatLogo} alt="SaidiStat Logo" className="h-full w-auto object-contain" />
             </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              SaidiStat
-            </span>
           </Link>
 
           {/* Desktop Navigation */}
