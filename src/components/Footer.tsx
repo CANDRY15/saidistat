@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Github, Linkedin, Mail } from "lucide-react";
-import saidistatLogo from "@/assets/saidistat-logo.jpg";
+import saidistatLogo from "@/assets/saidistat-logo-new.png";
 
 const Footer = () => {
   return (
@@ -10,12 +10,9 @@ const Footer = () => {
           {/* Brand */}
           <div className="space-y-4">
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full overflow-hidden shadow-lg">
-                <img src={saidistatLogo} alt="SaidiStat Logo" className="w-full h-full object-cover" />
+              <div className="h-12 w-auto">
+                <img src={saidistatLogo} alt="SaidiStat Logo" className="h-full w-auto object-contain" />
               </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                SaidiStat
-              </span>
             </Link>
             <p className="text-sm text-muted-foreground">
               Plateforme d'analyse biostatistique et de rédaction scientifique pour les professionnels de santé.
