@@ -25,6 +25,11 @@ import Percentiles from "./pages/exercises/Percentiles";
 import Probability from "./pages/exercises/Probability";
 import VariableTypes from "./pages/exercises/VariableTypes";
 import NotFound from "./pages/NotFound";
+import Features from "./pages/Features";
+import Documentation from "./pages/Documentation";
+import Tutorials from "./pages/Tutorials";
+import Support from "./pages/Support";
+import About from "./pages/About";
 
 // Test pages
 import Chi2Test from "./pages/tests/Chi2Test";
@@ -51,6 +56,11 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/features" element={<Features />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/documentation" element={<Documentation />} />
+            <Route path="/tutorials" element={<Tutorials />} />
+            <Route path="/support" element={<Support />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/data-analysis" element={<DataAnalysis />} />
