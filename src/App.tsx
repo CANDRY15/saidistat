@@ -25,6 +25,11 @@ import Percentiles from "./pages/exercises/Percentiles";
 import Probability from "./pages/exercises/Probability";
 import VariableTypes from "./pages/exercises/VariableTypes";
 import NotFound from "./pages/NotFound";
+import Features from "./pages/Features";
+import Documentation from "./pages/Documentation";
+import Tutorials from "./pages/Tutorials";
+import Support from "./pages/Support";
+import About from "./pages/About";
 
 // Test pages
 import Chi2Test from "./pages/tests/Chi2Test";
