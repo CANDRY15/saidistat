@@ -180,6 +180,7 @@ const Documentation = () => {
               </Card>
             ))}
           </div>
+          )}
         </section>
 
         {/* Help Section */}
