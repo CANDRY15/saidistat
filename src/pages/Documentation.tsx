@@ -64,6 +64,29 @@ const documentationSections = [
 ];
 
 const Documentation = () => {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredSections = useMemo(() => {
+    if (!searchQuery.trim()) return documentationSections;
+    const query = searchQuery.toLowerCase();
+    return documentationSections
+      .map((section) => {
+        const titleMatch = section.title.toLowerCase().includes(query);
+        const descMatch = section.description.toLowerCase().includes(query);
+        const matchingArticles = section.articles.filter((a) =>
+          a.toLowerCase().includes(query)
+        );
+        if (titleMatch || descMatch || matchingArticles.length > 0) {
+          return {
+            ...section,
+            articles: titleMatch || descMatch ? section.articles : matchingArticles,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean) as typeof documentationSections;
+  }, [searchQuery]);
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -75,9 +98,27 @@ const Documentation = () => {
             <h1 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               Documentation
             </h1>
-            <p className="text-lg text-muted-foreground">
+            <p className="text-lg text-muted-foreground mb-8">
               Tout ce dont vous avez besoin pour maîtriser SaidiStat et réaliser vos analyses biostatistiques.
             </p>
+            {/* Search Bar */}
+            <div className="relative max-w-xl mx-auto">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher dans la documentation..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-12 pr-10 h-12 text-base rounded-full border-2 focus-visible:ring-primary"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
           </div>
         </section>
 
