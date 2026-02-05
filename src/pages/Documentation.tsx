@@ -2,14 +2,18 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
+import { useState, useMemo } from "react";
 import { 
   BookOpen, 
   FileText, 
   Video, 
   Code,
   ArrowRight,
-  ExternalLink
+  ExternalLink,
+  Search,
+  X
 } from "lucide-react";
 
 const documentationSections = [
