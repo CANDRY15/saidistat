@@ -142,8 +142,17 @@ const Documentation = () => {
 
         {/* Documentation Grid */}
         <section className="container mx-auto px-4">
+          {filteredSections.length === 0 ? (
+            <div className="text-center py-16">
+              <Search className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Aucun résultat trouvé</h3>
+              <p className="text-muted-foreground">
+                Essayez avec d'autres termes de recherche.
+              </p>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {documentationSections.map((section, index) => (
+            {filteredSections.map((section, index) => (
               <Card key={index} className="hover:shadow-lg transition-shadow">
                 <CardHeader>
                   <div className="flex items-center gap-4">
