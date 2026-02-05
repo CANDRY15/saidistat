@@ -2,14 +2,18 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
+import { useState, useMemo } from "react";
 import { 
   BookOpen, 
   FileText, 
   Video, 
   Code,
   ArrowRight,
-  ExternalLink
+  ExternalLink,
+  Search,
+  X
 } from "lucide-react";
 
 const documentationSections = [
@@ -60,6 +64,29 @@ const documentationSections = [
 ];
 
 const Documentation = () => {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredSections = useMemo(() => {
+    if (!searchQuery.trim()) return documentationSections;
+    const query = searchQuery.toLowerCase();
+    return documentationSections
+      .map((section) => {
+        const titleMatch = section.title.toLowerCase().includes(query);
+        const descMatch = section.description.toLowerCase().includes(query);
+        const matchingArticles = section.articles.filter((a) =>
+          a.toLowerCase().includes(query)
+        );
+        if (titleMatch || descMatch || matchingArticles.length > 0) {
+          return {
+            ...section,
+            articles: titleMatch || descMatch ? section.articles : matchingArticles,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean) as typeof documentationSections;
+  }, [searchQuery]);
+
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -71,9 +98,27 @@ const Documentation = () => {
             <h1 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               Documentation
             </h1>
-            <p className="text-lg text-muted-foreground">
+            <p className="text-lg text-muted-foreground mb-8">
               Tout ce dont vous avez besoin pour maîtriser SaidiStat et réaliser vos analyses biostatistiques.
             </p>
+            {/* Search Bar */}
+            <div className="relative max-w-xl mx-auto">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher dans la documentation..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-12 pr-10 h-12 text-base rounded-full border-2 focus-visible:ring-primary"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
           </div>
         </section>
 
@@ -97,8 +142,17 @@ const Documentation = () => {
 
         {/* Documentation Grid */}
         <section className="container mx-auto px-4">
+          {filteredSections.length === 0 ? (
+            <div className="text-center py-16">
+              <Search className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Aucun résultat trouvé</h3>
+              <p className="text-muted-foreground">
+                Essayez avec d'autres termes de recherche.
+              </p>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {documentationSections.map((section, index) => (
+            {filteredSections.map((section, index) => (
               <Card key={index} className="hover:shadow-lg transition-shadow">
                 <CardHeader>
                   <div className="flex items-center gap-4">
@@ -126,6 +180,7 @@ const Documentation = () => {
               </Card>
             ))}
           </div>
+          )}
         </section>
 
         {/* Help Section */}
