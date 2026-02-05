@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Database, FileText, GraduationCap, Calculator, ChartBar, FileCheck } from "lucide-react";
+import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 import analysisIcon from "@/assets/feature-analysis.png";
 import writingIcon from "@/assets/feature-writing.png";
 import learningIcon from "@/assets/feature-learning.png";
@@ -49,11 +50,48 @@ const features = [
   }
 ];
 
+const FeatureCard = ({ feature, index }: { feature: typeof features[0]; index: number }) => {
+  const { ref, isVisible } = useScrollAnimation(0.1);
+  const Icon = feature.icon;
+
+  return (
+    <div
+      ref={ref}
+      className={`scroll-animate${isVisible ? " visible" : ""}`}
+      style={{ transitionDelay: `${index * 100}ms` }}
+    >
+      <Card 
+        className="group hover:shadow-xl transition-all duration-300 border-border hover:border-primary/50 overflow-hidden hover:-translate-y-1"
+      >
+        <CardContent className="p-4 sm:p-6">
+          <div className="relative mb-3 sm:mb-4">
+            <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-10 rounded-lg blur-xl group-hover:opacity-20 transition-opacity duration-500`} />
+            <div className={`relative w-12 h-12 sm:w-16 sm:h-16 rounded-lg bg-gradient-to-br ${feature.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
+              <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-primary-foreground" />
+            </div>
+          </div>
+          <h3 className="text-lg sm:text-xl font-semibold mb-1.5 sm:mb-2 group-hover:text-primary transition-colors duration-300">
+            {feature.title}
+          </h3>
+          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+            {feature.description}
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
 const Features = () => {
+  const { ref: titleRef, isVisible: titleVisible } = useScrollAnimation(0.2);
+
   return (
     <section className="py-12 sm:py-24 bg-gradient-to-b from-background to-muted/30">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-8 sm:mb-16">
+        <div
+          ref={titleRef}
+          className={`text-center mb-8 sm:mb-16 scroll-animate-scale${titleVisible ? " visible" : ""}`}
+        >
           <h2 className="text-2xl sm:text-4xl md:text-5xl font-bold mb-3 sm:mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Fonctionnalités Principales
           </h2>
@@ -63,30 +101,9 @@ const Features = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {features.map((feature, index) => {
-            const Icon = feature.icon;
-            return (
-              <Card 
-                key={index} 
-                className="group hover:shadow-xl transition-all duration-300 border-border hover:border-primary/50 overflow-hidden"
-              >
-                <CardContent className="p-4 sm:p-6">
-                  <div className="relative mb-3 sm:mb-4">
-                    <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-10 rounded-lg blur-xl group-hover:opacity-20 transition-opacity`} />
-                    <div className={`relative w-12 h-12 sm:w-16 sm:h-16 rounded-lg bg-gradient-to-br ${feature.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
-                      <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-primary-foreground" />
-                    </div>
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-semibold mb-1.5 sm:mb-2 group-hover:text-primary transition-colors">
-                    {feature.title}
-                  </h3>
-                  <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                    {feature.description}
-                  </p>
-                </CardContent>
-              </Card>
-            );
-          })}
+          {features.map((feature, index) => (
+            <FeatureCard key={index} feature={feature} index={index} />
+          ))}
         </div>
       </div>
     </section>
