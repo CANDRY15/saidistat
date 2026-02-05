@@ -201,9 +201,9 @@ const Support = () => {
                         required
                       />
                     </div>
-                    <Button type="submit" className="w-full gap-2">
-                      <Send className="w-4 h-4" />
-                      Envoyer le message
+                    <Button type="submit" className="w-full gap-2" disabled={isSubmitting}>
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      {isSubmitting ? "Envoi en cours..." : "Envoyer le message"}
                     </Button>
                   </form>
                 </CardContent>
