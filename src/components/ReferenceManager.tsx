@@ -413,6 +413,50 @@ const ReferenceManager = ({
     toast.success("Référence supprimée");
   };
 
+  const handleZoteroImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      if (!content) return;
+
+      try {
+        const importedRefs = parseReferenceFile(content, file.name);
+        if (importedRefs.length === 0) {
+          toast.error("Aucune référence trouvée dans le fichier");
+          return;
+        }
+
+        // Deduplicate against existing references
+        let added = 0;
+        const newRefs = [...references];
+        for (const ref of importedRefs) {
+          const isDuplicate = references.some(
+            r => (ref.doi && r.doi === ref.doi) || 
+                 (ref.pmid && r.pmid === ref.pmid) ||
+                 (ref.title && r.title?.toLowerCase() === ref.title.toLowerCase())
+          );
+          if (!isDuplicate) {
+            newRefs.push(ref);
+            added++;
+          }
+        }
+
+        onReferencesChange(newRefs);
+        toast.success(`${added} référence(s) importée(s) (${importedRefs.length - added} doublon(s) ignoré(s))`);
+      } catch (err) {
+        console.error('Zotero import error:', err);
+        toast.error("Erreur lors de l'import du fichier");
+      }
+    };
+    reader.readAsText(file);
+
+    // Reset input
+    if (zoteroInputRef.current) zoteroInputRef.current.value = '';
+  };
+
   const copyFormattedReferences = () => {
     const formatted = references
       .map((ref, i) => formatReference(ref, citationFormat, i + 1))
