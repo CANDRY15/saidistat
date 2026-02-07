@@ -9,10 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Plus, Trash2, Copy, BookOpen, FileText, Globe, 
-  Users, Calendar, BookMarked, Edit2, Check, X, Search, Loader2, Download
+  Users, Calendar, BookMarked, Edit2, Check, X, Search, Loader2, Download, Upload
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { parseReferenceFile } from "@/lib/zoteroParser";
 
 export type ReferenceType = 'article' | 'book' | 'chapter' | 'website' | 'thesis';
 export type CitationFormat = 'apa' | 'vancouver';
