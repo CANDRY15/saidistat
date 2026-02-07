@@ -1076,6 +1076,7 @@ const ThesisWriting = () => {
                         <RichTextEditor
                           content={getCurrentSection()?.content || ''}
                           onChange={(content) => updateSectionContent(getCurrentSection()?.id || '', content)}
+                          pageView={true}
                         />
                         <Button 
                           onClick={() => {
@@ -1087,13 +1088,14 @@ const ThesisWriting = () => {
                         </Button>
                       </div>
                     ) : (
-                      <ScrollArea className="h-[500px] border rounded-lg p-4">
-                        <div 
-                          className="prose prose-sm max-w-none dark:prose-invert"
-                          style={{ fontFamily: '"Times New Roman", Times, serif', lineHeight: 1.5 }}
-                          dangerouslySetInnerHTML={{ __html: getCurrentSection()?.content || '' }}
-                        />
-                      </ScrollArea>
+                      <div className="thesis-page-wrapper bg-muted/30 overflow-auto" style={{ maxHeight: '70vh' }}>
+                        <div className="thesis-page">
+                          <div 
+                            className="thesis-page-content prose prose-sm max-w-none dark:prose-invert"
+                            dangerouslySetInnerHTML={{ __html: getCurrentSection()?.content || '' }}
+                          />
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
