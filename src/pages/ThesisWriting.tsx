@@ -562,6 +562,9 @@ const ThesisWriting = () => {
       if (data.sections) {
         content = data.sections.map((s: any) => `<h3>${s.title}</h3>\n${s.content}`).join('\n\n');
       }
+
+      // Auto-add real references to bibliography
+      autoAddReferences(data.realReferences);
       
       setGeneratedSections(prev => {
         const existing = prev.findIndex(s => s.id === 'discussion');
@@ -580,7 +583,7 @@ const ThesisWriting = () => {
         return [...prev, newSection];
       });
 
-      toast.success("Discussion générée");
+      toast.success("Discussion générée avec références réelles");
       setTimeout(() => saveProject(), 500);
     } catch (error: any) {
       console.error('Error:', error);
