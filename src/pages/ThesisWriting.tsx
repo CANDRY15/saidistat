@@ -350,6 +350,9 @@ const ThesisWriting = () => {
       if (data.sections) {
         content = data.sections.map((s: any) => `<h3>${s.title}</h3>\n${s.content}`).join('\n\n');
       }
+
+      // Auto-add real references to bibliography
+      autoAddReferences(data.realReferences);
       
       setGeneratedSections(prev => {
         const existing = prev.findIndex(s => s.id === 'theoretical');
@@ -369,7 +372,7 @@ const ThesisWriting = () => {
       });
 
       setGenerationProgress(100);
-      toast.success("Partie théorique générée (15+ pages)");
+      toast.success("Partie théorique générée avec références réelles (15+ pages)");
       
       setTimeout(() => saveProject(), 500);
     } catch (error: any) {
