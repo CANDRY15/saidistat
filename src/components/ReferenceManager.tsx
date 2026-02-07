@@ -897,6 +897,47 @@ const ReferenceManager = ({
             </ScrollArea>
           </TabsContent>
 
+          {/* Zotero Import Tab */}
+          <TabsContent value="zotero" className="space-y-4">
+            <div className="space-y-3">
+              <Label>Importer depuis Zotero / EndNote</Label>
+              <p className="text-sm text-muted-foreground">
+                Importez un fichier de références au format RIS (.ris) ou BibTeX (.bib) exporté depuis Zotero, EndNote, Mendeley ou autre gestionnaire bibliographique.
+              </p>
+              <div className="space-y-3">
+                <input
+                  type="file"
+                  ref={zoteroInputRef}
+                  onChange={handleZoteroImport}
+                  accept=".ris,.bib,.bibtex"
+                  className="hidden"
+                />
+                <Button 
+                  onClick={() => zoteroInputRef.current?.click()}
+                  variant="outline" 
+                  className="w-full h-24 border-dashed border-2 flex flex-col gap-2"
+                >
+                  <Upload className="w-6 h-6 text-muted-foreground" />
+                  <span className="text-sm">Cliquez pour sélectionner un fichier .ris ou .bib</span>
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p><strong>Formats supportés:</strong></p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>RIS (.ris) — Zotero, EndNote, Mendeley</li>
+                  <li>BibTeX (.bib) — LaTeX, Zotero, JabRef</li>
+                </ul>
+                <p className="mt-2"><strong>Comment exporter depuis Zotero:</strong></p>
+                <ol className="list-decimal pl-4 space-y-0.5">
+                  <li>Sélectionnez vos références dans Zotero</li>
+                  <li>Fichier → Exporter la bibliothèque</li>
+                  <li>Choisissez le format RIS ou BibTeX</li>
+                  <li>Importez le fichier ici</li>
+                </ol>
+              </div>
+            </div>
+          </TabsContent>
+
           <TabsContent value="formatted" className="space-y-3">
             <div className="flex justify-end">
               <Button size="sm" variant="outline" onClick={copyFormattedReferences}>
