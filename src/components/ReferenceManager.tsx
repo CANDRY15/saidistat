@@ -466,10 +466,11 @@ const ReferenceManager = ({
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="list">Liste</TabsTrigger>
-            <TabsTrigger value="import">Import DOI</TabsTrigger>
+            <TabsTrigger value="import">DOI</TabsTrigger>
             <TabsTrigger value="pubmed">PubMed</TabsTrigger>
+            <TabsTrigger value="zotero">Zotero</TabsTrigger>
             <TabsTrigger value="formatted">Aperçu</TabsTrigger>
           </TabsList>
 
