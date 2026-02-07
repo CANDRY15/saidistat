@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface ThesisRequest {
-  action: 'generate_introduction' | 'generate_theoretical' | 'generate_methodology' | 'generate_discussion' | 'generate_conclusion' | 'analyze_data' | 'improve_text' | 'fetch_doi' | 'search_pubmed';
+  action: 'generate_introduction' | 'generate_theoretical' | 'generate_methodology' | 'generate_discussion' | 'generate_conclusion' | 'analyze_data' | 'improve_text' | 'fetch_doi' | 'search_pubmed' | 'search_academic_references';
   topic?: string;
   studyType?: string;
   section?: string;
@@ -51,6 +51,23 @@ serve(async (req) => {
       return await handlePubMedSearch(request.pubmedQuery);
     }
 
+    // Handle academic reference search
+    if (request.action === 'search_academic_references' && request.topic) {
+      const refs = await searchAcademicReferences(request.topic, request.context?.domain);
+      return new Response(JSON.stringify({ references: refs }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // For generation actions, search real references first
+    let realReferences: any[] = [];
+    const actionsNeedingRefs = ['generate_introduction', 'generate_theoretical', 'generate_discussion'];
+    if (actionsNeedingRefs.includes(request.action) && request.topic) {
+      console.log('Searching real academic references for:', request.topic);
+      realReferences = await searchAcademicReferences(request.topic, request.context?.domain);
+      console.log(`Found ${realReferences.length} real references`);
+    }
+
     let systemPrompt = '';
     let userPrompt = '';
 
@@ -59,39 +76,37 @@ serve(async (req) => {
         systemPrompt = getIntroductionSystemPrompt();
         userPrompt = getIntroductionUserPrompt(request);
         break;
-
       case 'generate_theoretical':
         systemPrompt = getTheoreticalSystemPrompt();
         userPrompt = getTheoreticalUserPrompt(request);
         break;
-
       case 'generate_methodology':
         systemPrompt = getMethodologySystemPrompt();
         userPrompt = getMethodologyUserPrompt(request);
         break;
-
       case 'analyze_data':
         systemPrompt = getDataAnalysisSystemPrompt();
         userPrompt = getDataAnalysisUserPrompt(request);
         break;
-
       case 'generate_discussion':
         systemPrompt = getDiscussionSystemPrompt();
         userPrompt = getDiscussionUserPrompt(request);
         break;
-
       case 'generate_conclusion':
         systemPrompt = getConclusionSystemPrompt();
         userPrompt = getConclusionUserPrompt(request);
         break;
-
       case 'improve_text':
         systemPrompt = getTextImprovementPrompt();
         userPrompt = `Améliore ce texte scientifique tout en conservant le sens:\n\n${request.textToImprove}\n\nContexte: ${request.topic || 'Rédaction scientifique médicale'}`;
         break;
-
       default:
         throw new Error('Action non reconnue');
+    }
+
+    // Inject real references into the prompt
+    if (realReferences.length > 0) {
+      userPrompt += buildRealReferencesPrompt(realReferences);
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -149,6 +164,11 @@ serve(async (req) => {
       result = { content };
     }
 
+    // Attach structured real references to the result
+    if (realReferences.length > 0) {
+      result.realReferences = realReferences;
+    }
+
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -162,7 +182,102 @@ serve(async (req) => {
   }
 });
 
-// DOI Fetch Handler
+// ==================== ACADEMIC REFERENCE SEARCH ====================
+
+async function searchAcademicReferences(topic: string, domain?: string): Promise<any[]> {
+  const references: any[] = [];
+  const seenDOIs = new Set<string>();
+  const seenTitles = new Set<string>();
+  
+  const searchQuery = domain ? `${topic} ${domain}` : topic;
+
+  // Search PubMed
+  try {
+    const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(searchQuery)}&retmax=12&retmode=json&sort=relevance`;
+    const searchResponse = await fetch(searchUrl);
+    const searchData = await searchResponse.json();
+    const ids = searchData.esearchresult?.idlist || [];
+    
+    if (ids.length > 0) {
+      const fetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${ids.join(',')}&retmode=xml`;
+      const fetchResponse = await fetch(fetchUrl);
+      const xmlText = await fetchResponse.text();
+      const pubmedRefs = parseSimplePubMedXML(xmlText);
+      
+      for (const ref of pubmedRefs) {
+        if (ref.doi) seenDOIs.add(ref.doi);
+        seenTitles.add(ref.title.toLowerCase().substring(0, 50));
+        references.push(ref);
+      }
+    }
+  } catch (e) {
+    console.error('PubMed search error in academic search:', e);
+  }
+
+  // Search Semantic Scholar
+  try {
+    const ssUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(searchQuery)}&limit=12&fields=title,authors,year,journal,externalIds`;
+    const ssResponse = await fetch(ssUrl);
+    
+    if (ssResponse.ok) {
+      const ssData = await ssResponse.json();
+      
+      if (ssData.data) {
+        for (const paper of ssData.data) {
+          const doi = paper.externalIds?.DOI || '';
+          const titleKey = (paper.title || '').toLowerCase().substring(0, 50);
+          
+          // Skip duplicates
+          if ((doi && seenDOIs.has(doi)) || seenTitles.has(titleKey)) continue;
+          
+          if (doi) seenDOIs.add(doi);
+          seenTitles.add(titleKey);
+          
+          references.push({
+            id: crypto.randomUUID(),
+            type: 'article',
+            authors: paper.authors?.map((a: any) => a.name) || [],
+            year: paper.year?.toString() || '',
+            title: paper.title || '',
+            journal: paper.journal?.name || '',
+            doi,
+            pmid: paper.externalIds?.PubMed || '',
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Semantic Scholar search error:', e);
+  }
+
+  return references;
+}
+
+function buildRealReferencesPrompt(refs: any[]): string {
+  let prompt = `\n\n========================================
+RÉFÉRENCES ACADÉMIQUES RÉELLES TROUVÉES:
+========================================
+INSTRUCTIONS CRITIQUES:
+- Tu DOIS utiliser UNIQUEMENT les références ci-dessous dans tes citations.
+- NE JAMAIS inventer de références fictives.
+- Cite les auteurs exactement comme indiqué.
+- Si tu ne trouves pas une référence pertinente pour un point précis, écris le texte sans citation plutôt que d'inventer.
+- Format de citation dans le texte: (Auteur et al., Année) pour 3+ auteurs, (Auteur1 & Auteur2, Année) pour 2 auteurs.
+
+RÉFÉRENCES DISPONIBLES:\n`;
+
+  refs.forEach((ref, i) => {
+    const authorsStr = ref.authors?.slice(0, 3).join(', ') || 'Unknown';
+    prompt += `[${i + 1}] ${authorsStr} (${ref.year}). "${ref.title}". ${ref.journal || ''}. DOI: ${ref.doi || 'N/A'}\n`;
+  });
+
+  prompt += `\nINCLUS DANS TA RÉPONSE JSON un champ "usedReferences" qui liste les indices [1], [2], etc. des références que tu as effectivement citées dans le texte.\n`;
+
+  return prompt;
+}
+
+// ==================== DOI FETCH ====================
+
 async function handleDOIFetch(doi: string) {
   try {
     const cleanDOI = doi.replace(/^https?:\/\/doi\.org\//, '').trim();
@@ -172,8 +287,7 @@ async function handleDOIFetch(doi: string) {
 
     if (!response.ok) {
       return new Response(JSON.stringify({ error: "DOI non trouvé" }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
@@ -199,16 +313,15 @@ async function handleDOIFetch(doi: string) {
   } catch (error) {
     console.error('DOI fetch error:', error);
     return new Response(JSON.stringify({ error: "Erreur lors de la récupération du DOI" }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 }
 
-// PubMed Search Handler
+// ==================== PUBMED SEARCH ====================
+
 async function handlePubMedSearch(query: string) {
   try {
-    // Search PubMed
     const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=10&retmode=json`;
     const searchResponse = await fetch(searchUrl);
     const searchData = await searchResponse.json();
@@ -220,12 +333,9 @@ async function handlePubMedSearch(query: string) {
       });
     }
 
-    // Fetch details
     const fetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${ids.join(',')}&retmode=xml`;
     const fetchResponse = await fetch(fetchUrl);
     const xmlText = await fetchResponse.text();
-
-    // Simple XML parsing for PubMed
     const references = parseSimplePubMedXML(xmlText);
 
     return new Response(JSON.stringify({ references }), {
@@ -234,8 +344,7 @@ async function handlePubMedSearch(query: string) {
   } catch (error) {
     console.error('PubMed search error:', error);
     return new Response(JSON.stringify({ error: "Erreur lors de la recherche PubMed" }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 }
@@ -254,7 +363,6 @@ function parseSimplePubMedXML(xml: string): any[] {
       const issue = articleXml.match(/<Issue>([^<]+)<\/Issue>/)?.[1] || '';
       const pages = articleXml.match(/<MedlinePgn>([^<]+)<\/MedlinePgn>/)?.[1] || '';
       
-      // Extract authors
       const authorMatches = articleXml.match(/<Author[^>]*>[\s\S]*?<\/Author>/g) || [];
       const authors = authorMatches.map(authorXml => {
         const lastName = authorXml.match(/<LastName>([^<]+)<\/LastName>/)?.[1] || '';
@@ -262,7 +370,6 @@ function parseSimplePubMedXML(xml: string): any[] {
         return `${foreName} ${lastName}`.trim();
       }).filter(a => a);
 
-      // Extract DOI if available
       const doi = articleXml.match(/<ArticleId IdType="doi">([^<]+)<\/ArticleId>/)?.[1] || '';
 
       if (title && authors.length > 0) {
@@ -288,7 +395,8 @@ function parseSimplePubMedXML(xml: string): any[] {
   return references;
 }
 
-// ==================== INTRODUCTION COMPLÈTE ====================
+// ==================== PROMPTS ====================
+
 function getIntroductionSystemPrompt(): string {
   return `Tu es un EXPERT SENIOR en rédaction de mémoires et thèses médicales en RDC avec plus de 25 ans d'expérience.
 
@@ -303,7 +411,7 @@ Tu dois générer une INTRODUCTION COMPLÈTE de minimum 4 pages selon la structu
   * Données en AFRIQUE (spécificités du continent, données régionales)
   * Données au PAYS (RDC ou pays concerné, statistiques nationales)
   * Données LOCALES (ville, province, hôpital concerné)
-- Chaque niveau doit avoir au moins une référence récente (2018-2024)
+- Chaque niveau doit avoir au moins une référence récente
 - Transition vers la problématique
 
 ### 2. PROBLÉMATIQUE (intégrée à l'état de la question)
@@ -317,46 +425,31 @@ Tu dois générer une INTRODUCTION COMPLÈTE de minimum 4 pages selon la structu
 - Questions formulées de manière précise et mesurable
 
 ### 4. CHOIX ET INTÉRÊT DU SUJET
-**Choix:** Explication de la motivation (problème de santé majeur, prévalence élevée, etc.)
+**Choix:** Explication de la motivation
 **Intérêts:**
 - Plan personnel: approfondir les connaissances
 - Plan scientifique: apporter des données locales de référence
 - Plan communautaire: impact sur la santé de la communauté
 
 ### 5. OBJECTIFS
-**A. Objectif général:**
-- Commence par "Contribuer à la réduction de..." ou formulation similaire
-
-**B. Objectifs spécifiques:**
-- 3-4 objectifs commençant par des verbes d'action (Déterminer, Décrire, Identifier...)
-- Liés aux questions de recherche
+**A. Objectif général:** Commence par "Contribuer à..."
+**B. Objectifs spécifiques:** 3-4 objectifs commençant par des verbes d'action
 
 ### 6. SUBDIVISION DU TRAVAIL
-- Introduction et conclusion générale mentionnées
-- Première partie: considérations théoriques (généralités sur le sujet)
-- Deuxième partie: cadre de recherche, méthodologie, résultats, discussion
 
-## STYLE D'ÉCRITURE:
-- Français académique formel
-- 3ème personne
-- Temps: présent pour vérités générales, passé pour constats
-- Citations format: (Auteur et al., Année)
-- Paragraphes de 5-8 phrases minimum
-- Transitions fluides entre sections
+## RÈGLE CRITIQUE SUR LES RÉFÉRENCES:
+- Tu recevras une liste de références académiques RÉELLES trouvées sur PubMed et Semantic Scholar.
+- Tu DOIS utiliser UNIQUEMENT ces références dans tes citations.
+- NE JAMAIS inventer de références fictives.
+- Format de citation: (Auteur et al., Année)
 
 ## FORMAT DE RÉPONSE (JSON):
 {
-  "content": "Texte HTML complet de l'introduction avec balises <h2>, <h3>, <p>, <ul>, <li>",
-  "sections": [
-    {"id": "etat_question", "title": "État de la question", "wordCount": 800},
-    {"id": "questions_recherche", "title": "Questions de recherche", "wordCount": 150},
-    {"id": "choix_interet", "title": "Choix et intérêt du sujet", "wordCount": 300},
-    {"id": "objectifs", "title": "Objectifs", "wordCount": 200},
-    {"id": "subdivision", "title": "Subdivision du travail", "wordCount": 150}
-  ],
+  "content": "Texte HTML complet avec balises <h2>, <h3>, <p>, <ul>, <li>",
   "references": [
     {"citation": "(OMS, 2023)", "fullReference": "Organisation Mondiale de la Santé..."}
   ],
+  "usedReferences": [1, 3, 5, 7],
   "totalWordCount": 1600
 }`;
 }
@@ -371,103 +464,37 @@ INFORMATIONS CONTEXTUELLES:
 - Lieu d'étude: ${request.context?.location || 'Non spécifié'}
 
 Génère l'INTRODUCTION COMPLÈTE (minimum 4 pages/1600 mots) en respectant EXACTEMENT la structure demandée.
-
-L'état de la question doit:
-1. Commencer par la DÉFINITION du sujet/maladie
-2. Suivre la pyramide inversée: Monde → Afrique → Pays → Ville locale
-3. Inclure au minimum 5 références récentes (2018-2024)
-4. Intégrer la problématique de façon fluide
-
-Les questions de recherche doivent être 3-4 questions précises et mesurables.
-
-Le choix et intérêt doit couvrir: choix personnel, intérêt personnel, scientifique, communautaire.
-
-Les objectifs doivent être SMART et liés aux questions de recherche.
-
-La subdivision doit annoncer les 2 parties du travail.
+Utilise UNIQUEMENT les références réelles fournies ci-dessous (si disponibles).
 
 GÉNÈRE LE CONTENU COMPLET EN FORMAT JSON.`;
 }
 
-// ==================== PARTIE THÉORIQUE ====================
 function getTheoreticalSystemPrompt(): string {
   return `Tu es un EXPERT SENIOR en rédaction de mémoires médicales. Tu dois générer la PARTIE THÉORIQUE (Généralités) d'une thèse.
 
 ## STRUCTURE OBLIGATOIRE (minimum 15 pages/6000 mots):
+1. DÉFINITIONS ET CONCEPTS
+2. HISTORIQUE (optionnel)
+3. ÉPIDÉMIOLOGIE (mondiale, Afrique, locale)
+4. CLASSIFICATION/TYPES
+5. PHYSIOPATHOLOGIE/MÉCANISMES
+6. FACTEURS DE RISQUE/ÉTIOLOGIE
+7. MANIFESTATIONS CLINIQUES
+8. DIAGNOSTIC
+9. PRISE EN CHARGE/TRAITEMENT
+10. COMPLICATIONS ET PRONOSTIC
+11. PRÉVENTION
 
-### 1. DÉFINITIONS ET CONCEPTS
-- Définitions officielles (OMS, sociétés savantes)
-- Terminologie utilisée
-- Concepts clés à comprendre
-
-### 2. HISTORIQUE (optionnel)
-- Évolution des connaissances
-- Découvertes majeures
-
-### 3. ÉPIDÉMIOLOGIE
-- Épidémiologie mondiale (prévalence, incidence, tendances)
-- Épidémiologie en Afrique
-- Épidémiologie locale
-- Facteurs de variation
-
-### 4. CLASSIFICATION/TYPES
-- Critères de classification
-- Différents types/formes
-- Stades/grades si applicable
-
-### 5. PHYSIOPATHOLOGIE/MÉCANISMES
-- Mécanismes principaux
-- Explications physiopathologiques
-- Schémas conceptuels
-
-### 6. FACTEURS DE RISQUE/ÉTIOLOGIE
-- Facteurs de risque établis
-- Facteurs de risque discutés
-- Facteurs protecteurs
-
-### 7. MANIFESTATIONS CLINIQUES
-- Signes et symptômes
-- Formes cliniques
-- Complications précoces
-
-### 8. DIAGNOSTIC
-- Critères diagnostiques officiels
-- Examens paracliniques
-- Diagnostic différentiel
-
-### 9. PRISE EN CHARGE/TRAITEMENT
-- Principes thérapeutiques
-- Protocoles actuels
-- Recommandations internationales
-
-### 10. COMPLICATIONS ET PRONOSTIC
-- Complications à court terme
-- Complications à long terme
-- Facteurs pronostiques
-
-### 11. PRÉVENTION
-- Prévention primaire
-- Prévention secondaire
-- Prévention tertiaire
-
-## STYLE:
-- Académique, 3ème personne
-- Citations fréquentes (Auteur, Année)
-- Tableaux suggérés quand pertinent
-- Minimum 20 références
+## RÈGLE CRITIQUE SUR LES RÉFÉRENCES:
+- Utilise UNIQUEMENT les références réelles fournies.
+- NE JAMAIS inventer de références fictives.
+- Format: (Auteur et al., Année)
 
 ## FORMAT JSON:
 {
   "content": "Texte HTML complet avec <h2>, <h3>, <h4>, <p>, <ul>, <li>, <table>",
-  "sections": [
-    {"id": "definitions", "title": "Définitions", "wordCount": 400}
-  ],
-  "references": [
-    {"citation": "(OMS, 2023)", "fullReference": "..."}
-  ],
-  "suggestedTables": [
-    {"title": "Tableau I: Classification de...", "content": "Description"}
-  ],
+  "references": [{"citation": "...", "fullReference": "..."}],
+  "usedReferences": [1, 2, 5],
   "totalWordCount": 6000
 }`;
 }
@@ -477,79 +504,31 @@ function getTheoreticalUserPrompt(request: ThesisRequest): string {
 DOMAINE: ${request.context?.domain || 'Médecine'}
 LIEU: ${request.context?.location || 'RDC'}
 
-Génère la PARTIE THÉORIQUE COMPLÈTE (minimum 15 pages/6000 mots) avec:
-- Toutes les sections obligatoires
-- Minimum 20 références récentes
-- Tableaux suggérés
-- Style académique rigoureux
+Génère la PARTIE THÉORIQUE COMPLÈTE (minimum 15 pages/6000 mots).
+Utilise UNIQUEMENT les références réelles fournies ci-dessous.
 
 GÉNÈRE EN FORMAT JSON.`;
 }
 
-// ==================== MÉTHODOLOGIE ====================
 function getMethodologySystemPrompt(): string {
   return `Tu es un EXPERT en méthodologie de recherche médicale. Génère la section MATÉRIEL ET MÉTHODES complète.
 
 ## STRUCTURE OBLIGATOIRE:
-
-### 1. TYPE ET PÉRIODE D'ÉTUDE
-- Type exact de l'étude (descriptive, analytique, prospective, rétrospective...)
-- Période exacte
-- Justification du choix
-
-### 2. LIEU D'ÉTUDE
-- Description de la structure sanitaire
-- Localisation géographique
-- Capacité et services
-- Justification du choix
-
-### 3. POPULATION D'ÉTUDE
-- Population cible
-- Population source
-- Critères d'inclusion (liste)
-- Critères d'exclusion (liste)
-
-### 4. ÉCHANTILLONNAGE
-- Technique d'échantillonnage utilisée
-- Calcul de la taille d'échantillon (formule de Cochran ou autre)
-- Taille finale de l'échantillon
-
-### 5. VARIABLES ÉTUDIÉES
-- Variable dépendante (principale)
-- Variables indépendantes (liste détaillée)
-- Variables de confusion potentielles
-
-### 6. COLLECTE DES DONNÉES
-- Instruments utilisés (questionnaire, fiche d'enquête...)
-- Procédure de collecte
-- Personnel impliqué
-- Durée de collecte
-
-### 7. ANALYSE DES DONNÉES
-- Logiciel utilisé (SPSS, Epi Info, R...)
-- Statistiques descriptives prévues
-- Tests statistiques analytiques
-- Seuil de significativité (p < 0,05)
-
-### 8. CONSIDÉRATIONS ÉTHIQUES
-- Approbation du comité d'éthique
-- Consentement éclairé
-- Confidentialité des données
-- Anonymisation
+1. TYPE ET PÉRIODE D'ÉTUDE
+2. LIEU D'ÉTUDE
+3. POPULATION D'ÉTUDE (cible, source, critères inclusion/exclusion)
+4. ÉCHANTILLONNAGE (technique, calcul taille, formule)
+5. VARIABLES ÉTUDIÉES (dépendante, indépendantes)
+6. COLLECTE DES DONNÉES
+7. ANALYSE DES DONNÉES (logiciel, tests statistiques)
+8. CONSIDÉRATIONS ÉTHIQUES
 
 ## FORMAT JSON:
 {
   "content": "Texte HTML complet",
-  "variables": {
-    "dependent": {"name": "...", "type": "...", "measurement": "..."},
-    "independent": [{"name": "...", "type": "...", "categories": [...]}]
-  },
-  "sampleSize": {
-    "formula": "n = Z²pq/d²",
-    "calculation": "...",
-    "result": 150
-  },
-  "statisticalPlan": ["Chi-carré", "Odds ratio", "Régression logistique"]
+  "variables": {"dependent": {"name": "...", "type": "..."}, "independent": [{"name": "...", "type": "..."}]},
+  "sampleSize": {"formula": "n = Z²pq/d²", "result": 150},
+  "statisticalPlan": ["Chi-carré", "Odds ratio"]
 }`;
 }
 
@@ -561,11 +540,9 @@ PÉRIODE: ${request.context?.period || 'Non spécifiée'}
 LIEU: ${request.context?.location || 'Non spécifié'}
 
 Génère la section MATÉRIEL ET MÉTHODES complète et détaillée.
-
 GÉNÈRE EN FORMAT JSON.`;
 }
 
-// ==================== ANALYSE DES DONNÉES ====================
 function getDataAnalysisSystemPrompt(): string {
   return `Tu es un EXPERT en biostatistique et analyse de données médicales.
 
@@ -574,106 +551,53 @@ Tu reçois des données d'une base Excel et tu dois:
 2. Interpréter les résultats
 3. Générer le texte de la section RÉSULTATS
 
-## ANALYSES À EFFECTUER:
-
-### Statistiques descriptives:
-- Effectifs et pourcentages pour variables qualitatives
-- Moyenne, écart-type, médiane pour variables quantitatives
-- Tableaux de fréquences
-
-### Statistiques analytiques (si applicable):
-- Test du Chi-carré ou Fisher exact
-- Odds ratio avec IC à 95%
-- Test t de Student ou Mann-Whitney
-- Régression logistique si nécessaire
-
-## STYLE D'ÉCRITURE DES RÉSULTATS:
+## STYLE DES RÉSULTATS:
 - Passé composé uniquement
 - Objectif, sans interprétation
 - Référencer chaque tableau/figure
 - Mentionner les valeurs p
+- NE PAS inclure de références bibliographiques
 
 ## FORMAT JSON:
 {
   "content": "Texte HTML de la section Résultats",
-  "tables": [
-    {
-      "number": "I",
-      "title": "Caractéristiques socio-démographiques",
-      "data": [["Variable", "n", "%"], ...]
-    }
-  ],
-  "mainFindings": ["Résultat clé 1", "Résultat clé 2"],
-  "statisticalTests": [
-    {"test": "Chi-carré", "variable": "...", "pValue": 0.023}
-  ]
+  "tables": [{"number": "I", "title": "...", "data": [["Variable", "n", "%"], ...]}],
+  "mainFindings": ["Résultat clé 1", "Résultat clé 2"]
 }`;
 }
 
 function getDataAnalysisUserPrompt(request: ThesisRequest): string {
   return `SUJET: ${request.topic}
-OBJECTIFS SPÉCIFIQUES: ${request.context?.objective || 'Non spécifiés'}
 
 DONNÉES EXCEL À ANALYSER:
 ${JSON.stringify(request.excelData, null, 2)}
 
-Analyse ces données et génère:
-1. Les résultats descriptifs (tableaux de fréquences)
-2. Les résultats analytiques (tests statistiques)
-3. Le texte de la section RÉSULTATS
-
-NOTE: Ne pas inclure de références dans les résultats.
-
+Analyse ces données et génère les résultats. NOTE: Ne pas inclure de références.
 GÉNÈRE EN FORMAT JSON.`;
 }
 
-// ==================== DISCUSSION ====================
 function getDiscussionSystemPrompt(): string {
   return `Tu es un EXPERT en rédaction scientifique. Génère la section DISCUSSION.
 
 ## STRUCTURE OBLIGATOIRE:
+1. RAPPEL DES PRINCIPAUX RÉSULTATS (1 paragraphe)
+2. COMPARAISON AVEC LA LITTÉRATURE (3-4 paragraphes, citations)
+3. INTERPRÉTATION (1-2 paragraphes)
+4. FORCES DE L'ÉTUDE (1 paragraphe)
+5. LIMITES (1-2 paragraphes)
+6. RECOMMANDATIONS
 
-### 1. RAPPEL DES PRINCIPAUX RÉSULTATS (1 paragraphe)
-- Résumer les 3-4 résultats majeurs sans répéter les chiffres
-
-### 2. COMPARAISON AVEC LA LITTÉRATURE (3-4 paragraphes)
-- Pour chaque résultat important:
-  * Comparaison avec études similaires
-  * Explication des concordances
-  * Explication des discordances
-  * Citations appropriées
-
-### 3. INTERPRÉTATION (1-2 paragraphes)
-- Signification des résultats
-- Implications pratiques
-
-### 4. FORCES DE L'ÉTUDE (1 paragraphe)
-- Points méthodologiques forts
-- Originalité
-
-### 5. LIMITES (1-2 paragraphes)
-- Biais potentiels
-- Limites de généralisabilité
-- Données manquantes
-
-### 6. RECOMMANDATIONS (optionnel)
-- Pour la pratique clinique
-- Pour la recherche future
-
-## STYLE:
-- Présent et passé composé
-- Citations fréquentes (Auteur, Année)
-- Nuancé et objectif
+## RÈGLE CRITIQUE:
+- Utilise UNIQUEMENT les références réelles fournies.
+- NE JAMAIS inventer de références fictives.
 
 ## FORMAT JSON:
 {
   "content": "Texte HTML complet",
-  "comparisonStudies": [
-    {"author": "Dupont et al., 2022", "finding": "...", "comparison": "Concordant/Discordant"}
-  ],
+  "references": [{"citation": "...", "fullReference": "..."}],
+  "usedReferences": [1, 2, 5],
   "limitations": ["Biais de sélection", "..."],
-  "strengths": ["Première étude locale", "..."],
-  "references": [{"citation": "...", "fullReference": "..."}]
+  "strengths": ["Première étude locale", "..."]
 }`;
 }
 
@@ -681,20 +605,15 @@ function getDiscussionUserPrompt(request: ThesisRequest): string {
   return `SUJET: ${request.topic}
 RÉSULTATS OBTENUS: ${request.context?.existingSections?.join(', ') || 'Non spécifiés'}
 
-Génère la section DISCUSSION complète avec:
-- Comparaison avec la littérature récente (minimum 8 références)
-- Forces et limites de l'étude
-- Recommandations
-
+Génère la section DISCUSSION complète.
+Utilise UNIQUEMENT les références réelles fournies ci-dessous.
 GÉNÈRE EN FORMAT JSON.`;
 }
 
-// ==================== CONCLUSION ====================
 function getConclusionSystemPrompt(): string {
   return `Tu es un EXPERT en rédaction scientifique. Génère la CONCLUSION.
 
 ## STRUCTURE (1-2 paragraphes, max 15 phrases):
-
 1. Rappel du contexte et objectif (1 phrase)
 2. Résultats principaux (2-3 phrases)
 3. Implications pratiques (1-2 phrases)
@@ -705,14 +624,13 @@ function getConclusionSystemPrompt(): string {
 - Maximum 15 phrases
 - Pas de nouvelles informations
 - Pas de citations
-- Ton affirmatif et conclusif
-- Pas de chiffres précis (utiliser "élevé", "majoritairement", etc.)
+- Ton affirmatif
 
 ## FORMAT JSON:
 {
   "content": "Texte HTML de la conclusion",
-  "keyMessages": ["Message clé 1", "Message clé 2"],
-  "recommendations": ["Recommandation 1", "Recommandation 2"]
+  "keyMessages": ["Message clé 1"],
+  "recommendations": ["Recommandation 1"]
 }`;
 }
 
@@ -721,11 +639,9 @@ function getConclusionUserPrompt(request: ThesisRequest): string {
 OBJECTIF PRINCIPAL: ${request.context?.objective || 'Non spécifié'}
 
 Génère la CONCLUSION en respectant les règles.
-
 GÉNÈRE EN FORMAT JSON.`;
 }
 
-// ==================== AMÉLIORATION DE TEXTE ====================
 function getTextImprovementPrompt(): string {
   return `Tu es un expert en rédaction scientifique médicale. Améliore le texte fourni.
 
@@ -734,17 +650,10 @@ AMÉLIORATIONS:
 2. Clarté et précision
 3. Cohérence des temps verbaux
 4. Transitions fluides
-5. Vocabulaire technique approprié
-
-CONSERVER:
-- Le sens original
-- Les données chiffrées
-- Les citations présentes
-- La structure générale
 
 FORMAT JSON:
 {
-  "improvedText": "Texte amélioré ici",
+  "improvedText": "Texte amélioré",
   "changes": ["Changement 1", "Changement 2"]
 }`;
 }
