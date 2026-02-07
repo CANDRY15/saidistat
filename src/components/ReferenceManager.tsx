@@ -220,6 +220,7 @@ const ReferenceManager = ({
   const [editingRef, setEditingRef] = useState<Reference | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState('list');
+  const zoteroInputRef = useRef<HTMLInputElement>(null);
   
   // DOI/PubMed import states
   const [doiInput, setDoiInput] = useState('');
