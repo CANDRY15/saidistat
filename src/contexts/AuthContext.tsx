@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -26,25 +26,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    let isMounted = true;
 
-    // Set up auth state listener
+    // Set up auth state listener FIRST (before getSession)
+    // This handles ONGOING auth changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
+      (event, newSession) => {
+        if (!isMounted) return;
+        
+        // Only update state for meaningful events, not during initial load
+        if (initializedRef.current) {
+          setSession(newSession);
+          setUser(newSession?.user ?? null);
+        }
       }
     );
 
-    return () => subscription.unsubscribe();
+    // INITIAL load - fetch session once and set loading to false
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!isMounted) return;
+
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        if (isMounted) {
+          initializedRef.current = true;
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
