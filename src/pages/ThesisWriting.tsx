@@ -240,6 +240,28 @@ const ThesisWriting = () => {
     setCurrentProject(null);
     setExcelData(null);
   };
+  // Helper: auto-add real references from AI generation to bibliography
+  const autoAddReferences = (realRefs: any[] | undefined) => {
+    if (!realRefs || realRefs.length === 0) return;
+    
+    const newRefs = [...bibliography];
+    let addedCount = 0;
+    for (const ref of realRefs) {
+      const isDuplicate = newRefs.some(
+        r => (ref.doi && r.doi === ref.doi) || 
+             (ref.pmid && r.pmid === ref.pmid) ||
+             (ref.title && r.title?.toLowerCase() === ref.title.toLowerCase())
+      );
+      if (!isDuplicate) {
+        newRefs.push(ref);
+        addedCount++;
+      }
+    }
+    if (addedCount > 0) {
+      setBibliography(newRefs);
+      toast.success(`${addedCount} références réelles ajoutées à la bibliographie`);
+    }
+  };
 
   // Generate Introduction (complete)
   const generateIntroduction = async () => {
@@ -271,6 +293,9 @@ const ThesisWriting = () => {
 
       const content = data.content || '';
       
+      // Auto-add real references to bibliography
+      autoAddReferences(data.realReferences);
+      
       setGeneratedSections(prev => {
         const existing = prev.findIndex(s => s.id === 'introduction');
         const newSection = { 
@@ -289,7 +314,7 @@ const ThesisWriting = () => {
       });
 
       setGenerationProgress(100);
-      toast.success("Introduction générée (4+ pages)");
+      toast.success("Introduction générée avec références réelles (4+ pages)");
       setStep(2);
       
       setTimeout(() => saveProject(), 500);
@@ -329,6 +354,9 @@ const ThesisWriting = () => {
       if (data.sections) {
         content = data.sections.map((s: any) => `<h3>${s.title}</h3>\n${s.content}`).join('\n\n');
       }
+
+      // Auto-add real references to bibliography
+      autoAddReferences(data.realReferences);
       
       setGeneratedSections(prev => {
         const existing = prev.findIndex(s => s.id === 'theoretical');
@@ -348,7 +376,7 @@ const ThesisWriting = () => {
       });
 
       setGenerationProgress(100);
-      toast.success("Partie théorique générée (15+ pages)");
+      toast.success("Partie théorique générée avec références réelles (15+ pages)");
       
       setTimeout(() => saveProject(), 500);
     } catch (error: any) {
@@ -534,6 +562,9 @@ const ThesisWriting = () => {
       if (data.sections) {
         content = data.sections.map((s: any) => `<h3>${s.title}</h3>\n${s.content}`).join('\n\n');
       }
+
+      // Auto-add real references to bibliography
+      autoAddReferences(data.realReferences);
       
       setGeneratedSections(prev => {
         const existing = prev.findIndex(s => s.id === 'discussion');
@@ -552,7 +583,7 @@ const ThesisWriting = () => {
         return [...prev, newSection];
       });
 
-      toast.success("Discussion générée");
+      toast.success("Discussion générée avec références réelles");
       setTimeout(() => saveProject(), 500);
     } catch (error: any) {
       console.error('Error:', error);
@@ -1045,6 +1076,7 @@ const ThesisWriting = () => {
                         <RichTextEditor
                           content={getCurrentSection()?.content || ''}
                           onChange={(content) => updateSectionContent(getCurrentSection()?.id || '', content)}
+                          pageView={true}
                         />
                         <Button 
                           onClick={() => {
@@ -1056,13 +1088,14 @@ const ThesisWriting = () => {
                         </Button>
                       </div>
                     ) : (
-                      <ScrollArea className="h-[500px] border rounded-lg p-4">
-                        <div 
-                          className="prose prose-sm max-w-none dark:prose-invert"
-                          style={{ fontFamily: '"Times New Roman", Times, serif', lineHeight: 1.5 }}
-                          dangerouslySetInnerHTML={{ __html: getCurrentSection()?.content || '' }}
-                        />
-                      </ScrollArea>
+                      <div className="thesis-page-wrapper bg-muted/30 overflow-auto" style={{ maxHeight: '70vh' }}>
+                        <div className="thesis-page">
+                          <div 
+                            className="thesis-page-content prose prose-sm max-w-none dark:prose-invert"
+                            dangerouslySetInnerHTML={{ __html: getCurrentSection()?.content || '' }}
+                          />
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}

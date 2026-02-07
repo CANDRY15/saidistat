@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,10 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Plus, Trash2, Copy, BookOpen, FileText, Globe, 
-  Users, Calendar, BookMarked, Edit2, Check, X, Search, Loader2, Download
+  Users, Calendar, BookMarked, Edit2, Check, X, Search, Loader2, Download, Upload
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { parseReferenceFile } from "@/lib/zoteroParser";
 
 export type ReferenceType = 'article' | 'book' | 'chapter' | 'website' | 'thesis';
 export type CitationFormat = 'apa' | 'vancouver';
@@ -219,6 +220,7 @@ const ReferenceManager = ({
   const [editingRef, setEditingRef] = useState<Reference | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState('list');
+  const zoteroInputRef = useRef<HTMLInputElement>(null);
   
   // DOI/PubMed import states
   const [doiInput, setDoiInput] = useState('');
@@ -411,6 +413,50 @@ const ReferenceManager = ({
     toast.success("Référence supprimée");
   };
 
+  const handleZoteroImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      if (!content) return;
+
+      try {
+        const importedRefs = parseReferenceFile(content, file.name);
+        if (importedRefs.length === 0) {
+          toast.error("Aucune référence trouvée dans le fichier");
+          return;
+        }
+
+        // Deduplicate against existing references
+        let added = 0;
+        const newRefs = [...references];
+        for (const ref of importedRefs) {
+          const isDuplicate = references.some(
+            r => (ref.doi && r.doi === ref.doi) || 
+                 (ref.pmid && r.pmid === ref.pmid) ||
+                 (ref.title && r.title?.toLowerCase() === ref.title.toLowerCase())
+          );
+          if (!isDuplicate) {
+            newRefs.push(ref);
+            added++;
+          }
+        }
+
+        onReferencesChange(newRefs);
+        toast.success(`${added} référence(s) importée(s) (${importedRefs.length - added} doublon(s) ignoré(s))`);
+      } catch (err) {
+        console.error('Zotero import error:', err);
+        toast.error("Erreur lors de l'import du fichier");
+      }
+    };
+    reader.readAsText(file);
+
+    // Reset input
+    if (zoteroInputRef.current) zoteroInputRef.current.value = '';
+  };
+
   const copyFormattedReferences = () => {
     const formatted = references
       .map((ref, i) => formatReference(ref, citationFormat, i + 1))
@@ -464,10 +510,11 @@ const ReferenceManager = ({
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="list">Liste</TabsTrigger>
-            <TabsTrigger value="import">Import DOI</TabsTrigger>
+            <TabsTrigger value="import">DOI</TabsTrigger>
             <TabsTrigger value="pubmed">PubMed</TabsTrigger>
+            <TabsTrigger value="zotero">Zotero</TabsTrigger>
             <TabsTrigger value="formatted">Aperçu</TabsTrigger>
           </TabsList>
 
@@ -848,6 +895,47 @@ const ReferenceManager = ({
                 )}
               </div>
             </ScrollArea>
+          </TabsContent>
+
+          {/* Zotero Import Tab */}
+          <TabsContent value="zotero" className="space-y-4">
+            <div className="space-y-3">
+              <Label>Importer depuis Zotero / EndNote</Label>
+              <p className="text-sm text-muted-foreground">
+                Importez un fichier de références au format RIS (.ris) ou BibTeX (.bib) exporté depuis Zotero, EndNote, Mendeley ou autre gestionnaire bibliographique.
+              </p>
+              <div className="space-y-3">
+                <input
+                  type="file"
+                  ref={zoteroInputRef}
+                  onChange={handleZoteroImport}
+                  accept=".ris,.bib,.bibtex"
+                  className="hidden"
+                />
+                <Button 
+                  onClick={() => zoteroInputRef.current?.click()}
+                  variant="outline" 
+                  className="w-full h-24 border-dashed border-2 flex flex-col gap-2"
+                >
+                  <Upload className="w-6 h-6 text-muted-foreground" />
+                  <span className="text-sm">Cliquez pour sélectionner un fichier .ris ou .bib</span>
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p><strong>Formats supportés:</strong></p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>RIS (.ris) — Zotero, EndNote, Mendeley</li>
+                  <li>BibTeX (.bib) — LaTeX, Zotero, JabRef</li>
+                </ul>
+                <p className="mt-2"><strong>Comment exporter depuis Zotero:</strong></p>
+                <ol className="list-decimal pl-4 space-y-0.5">
+                  <li>Sélectionnez vos références dans Zotero</li>
+                  <li>Fichier → Exporter la bibliothèque</li>
+                  <li>Choisissez le format RIS ou BibTeX</li>
+                  <li>Importez le fichier ici</li>
+                </ol>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="formatted" className="space-y-3">
