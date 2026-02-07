@@ -240,6 +240,28 @@ const ThesisWriting = () => {
     setCurrentProject(null);
     setExcelData(null);
   };
+  // Helper: auto-add real references from AI generation to bibliography
+  const autoAddReferences = (realRefs: any[] | undefined) => {
+    if (!realRefs || realRefs.length === 0) return;
+    
+    const newRefs = [...bibliography];
+    let addedCount = 0;
+    for (const ref of realRefs) {
+      const isDuplicate = newRefs.some(
+        r => (ref.doi && r.doi === ref.doi) || 
+             (ref.pmid && r.pmid === ref.pmid) ||
+             (ref.title && r.title?.toLowerCase() === ref.title.toLowerCase())
+      );
+      if (!isDuplicate) {
+        newRefs.push(ref);
+        addedCount++;
+      }
+    }
+    if (addedCount > 0) {
+      setBibliography(newRefs);
+      toast.success(`${addedCount} références réelles ajoutées à la bibliographie`);
+    }
+  };
 
   // Generate Introduction (complete)
   const generateIntroduction = async () => {
