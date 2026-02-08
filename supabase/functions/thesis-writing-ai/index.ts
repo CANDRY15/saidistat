@@ -184,44 +184,85 @@ serve(async (req) => {
 
 // ==================== ACADEMIC REFERENCE SEARCH ====================
 
-// French-to-English medical term mapping for better search results
-const frenchToEnglishTerms: Record<string, string> = {
-  'trouble': 'disorder', 'humeur': 'mood', 'maladie': 'disease',
-  'prévalence': 'prevalence', 'incidence': 'incidence', 'mortalité': 'mortality',
-  'prise en charge': 'management', 'traitement': 'treatment', 'diagnostic': 'diagnosis',
-  'épidémiologie': 'epidemiology', 'clinique': 'clinical', 'facteurs de risque': 'risk factors',
-  'infection': 'infection', 'grossesse': 'pregnancy', 'accouchement': 'delivery',
-  'hypertension': 'hypertension', 'diabète': 'diabetes', 'paludisme': 'malaria',
-  'drépanocytose': 'sickle cell disease', 'tuberculose': 'tuberculosis',
-  'VIH': 'HIV', 'SIDA': 'AIDS', 'cancer': 'cancer', 'anémie': 'anemia',
-  'pneumonie': 'pneumonia', 'méningite': 'meningitis', 'diarrhée': 'diarrhea',
-  'malnutrition': 'malnutrition', 'obésité': 'obesity', 'chirurgie': 'surgery',
-  'pédiatrie': 'pediatrics', 'néonatologie': 'neonatology', 'gynécologie': 'gynecology',
-  'obstétrique': 'obstetrics', 'cardiologie': 'cardiology', 'neurologie': 'neurology',
-  'psychiatrie': 'psychiatry', 'dermatologie': 'dermatology', 'ophtalmologie': 'ophthalmology',
-  'hôpital': 'hospital', 'urgence': 'emergency', 'soins intensifs': 'intensive care',
-  'nouveau-né': 'newborn', 'nourrisson': 'infant', 'enfant': 'child',
-  'femme enceinte': 'pregnant woman', 'personne âgée': 'elderly',
-  'césarienne': 'cesarean section', 'prématurité': 'prematurity',
-  'insuffisance rénale': 'renal failure', 'insuffisance cardiaque': 'heart failure',
-  'accident vasculaire cérébral': 'stroke', 'hépatite': 'hepatitis',
-  'dépression': 'depression', 'anxiété': 'anxiety', 'schizophrénie': 'schizophrenia',
-  'épilepsie': 'epilepsy', 'asthme': 'asthma', 'profil': 'profile',
-  'fréquence': 'frequency', 'déterminants': 'determinants', 'complications': 'complications',
-  'pronostic': 'prognosis', 'survie': 'survival', 'morbi-mortalité': 'morbidity and mortality',
+// French compound medical phrases → English (order: longest first for correct matching)
+const frenchPhrases: [string, string][] = [
+  ['trouble de l\'humeur', 'mood disorder'],
+  ['trouble bipolaire', 'bipolar disorder'],
+  ['trouble dépressif majeur', 'major depressive disorder'],
+  ['trouble de stress post-traumatique', 'post-traumatic stress disorder'],
+  ['trouble de la personnalité', 'personality disorder'],
+  ['trouble anxieux', 'anxiety disorder'],
+  ['trouble obsessionnel compulsif', 'obsessive compulsive disorder'],
+  ['trouble du spectre autistique', 'autism spectrum disorder'],
+  ['prise en charge', 'management treatment'],
+  ['facteurs de risque', 'risk factors'],
+  ['soins intensifs', 'intensive care'],
+  ['accident vasculaire cérébral', 'stroke'],
+  ['insuffisance rénale', 'renal failure'],
+  ['insuffisance cardiaque', 'heart failure'],
+  ['femme enceinte', 'pregnant woman'],
+  ['personne âgée', 'elderly'],
+  ['nouveau-né', 'newborn'],
+  ['drépanocytose', 'sickle cell disease'],
+  ['césarienne', 'cesarean section'],
+  ['infection génitale', 'genital infection'],
+  ['morbi-mortalité', 'morbidity mortality'],
+];
+
+const frenchWords: Record<string, string> = {
+  'épidémiologie': 'epidemiology', 'epidemiologie': 'epidemiology',
+  'clinique': 'clinical', 'prévalence': 'prevalence', 'prevalence': 'prevalence',
+  'incidence': 'incidence', 'mortalité': 'mortality', 'mortalite': 'mortality',
+  'traitement': 'treatment', 'diagnostic': 'diagnosis',
+  'maladie': 'disease', 'profil': 'profile',
+  'fréquence': 'frequency', 'frequence': 'frequency',
+  'déterminants': 'determinants', 'determinants': 'determinants',
+  'complications': 'complications', 'pronostic': 'prognosis',
+  'survie': 'survival', 'grossesse': 'pregnancy', 'accouchement': 'delivery',
+  'hypertension': 'hypertension', 'diabète': 'diabetes', 'diabete': 'diabetes',
+  'paludisme': 'malaria', 'tuberculose': 'tuberculosis',
+  'pneumonie': 'pneumonia', 'méningite': 'meningitis', 'meningite': 'meningitis',
+  'diarrhée': 'diarrhea', 'malnutrition': 'malnutrition',
+  'obésité': 'obesity', 'obesite': 'obesity',
+  'chirurgie': 'surgery', 'cancer': 'cancer',
+  'anémie': 'anemia', 'anemie': 'anemia',
+  'dépression': 'depression', 'depression': 'depression',
+  'anxiété': 'anxiety', 'anxiete': 'anxiety',
+  'schizophrénie': 'schizophrenia', 'schizophrenie': 'schizophrenia',
+  'épilepsie': 'epilepsy', 'epilepsie': 'epilepsy',
+  'asthme': 'asthma', 'hépatite': 'hepatitis', 'hepatite': 'hepatitis',
+  'pédiatrie': 'pediatrics', 'pediatrie': 'pediatrics',
+  'néonatologie': 'neonatology', 'neonatologie': 'neonatology',
+  'gynécologie': 'gynecology', 'gynecologie': 'gynecology',
+  'obstétrique': 'obstetrics', 'obstetrique': 'obstetrics',
+  'cardiologie': 'cardiology', 'neurologie': 'neurology',
+  'psychiatrie': 'psychiatry', 'dermatologie': 'dermatology',
+  'ophtalmologie': 'ophthalmology', 'urgence': 'emergency',
+  'infection': 'infection', 'VIH': 'HIV', 'SIDA': 'AIDS',
+  'nourrisson': 'infant', 'enfant': 'child',
+  'prématurité': 'prematurity', 'prematurite': 'prematurity',
 };
 
 function translateToEnglish(frenchQuery: string): string {
-  let translated = frenchQuery.toLowerCase();
-  // Remove location-specific terms and dates
-  translated = translated.replace(/à\s+\w+/g, '').replace(/en\s+\d{4}/g, '').replace(/\d{4}/g, '');
-  // Sort by length descending to match longer phrases first
-  const sortedTerms = Object.entries(frenchToEnglishTerms).sort((a, b) => b[0].length - a[0].length);
-  for (const [fr, en] of sortedTerms) {
-    translated = translated.replace(new RegExp(fr, 'gi'), en);
+  let text = frenchQuery.toLowerCase();
+  // Remove location names, hospital names, dates, and filler words
+  text = text.replace(/\b(à|au|aux|en|de|du|des|la|le|les|l'|d'|et|ou|un|une)\b/g, ' ');
+  text = text.replace(/\b(hopital|hôpital|cliniques?\s+universitaires?)\s+\w+/g, '');
+  text = text.replace(/\b(lubumbashi|kinshasa|sendwe|bukavu|goma|kisangani|mbuji.?mayi|kananga)\b/gi, '');
+  text = text.replace(/\b(rdc|congo|afrique)\b/gi, 'Africa');
+  text = text.replace(/\b\d{4}\b/g, '');
+  text = text.replace(/[:\-,;]/g, ' ');
+
+  // Replace compound phrases first
+  for (const [fr, en] of frenchPhrases) {
+    text = text.replace(new RegExp(fr, 'gi'), en);
   }
-  // Clean up extra spaces
-  return translated.replace(/\s+/g, ' ').trim();
+  // Then individual words
+  for (const [fr, en] of Object.entries(frenchWords)) {
+    text = text.replace(new RegExp(`\\b${fr}\\b`, 'gi'), en);
+  }
+  // Clean up
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 function addReference(references: any[], ref: any, seenDOIs: Set<string>, seenTitles: Set<string>): boolean {
