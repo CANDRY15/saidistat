@@ -245,22 +245,37 @@ const frenchWords: Record<string, string> = {
 
 function translateToEnglish(frenchQuery: string): string {
   let text = frenchQuery.toLowerCase();
-  // Remove location names, hospital names, dates, and filler words
-  text = text.replace(/\b(à|au|aux|en|de|du|des|la|le|les|l'|d'|et|ou|un|une)\b/g, ' ');
-  text = text.replace(/\b(hopital|hôpital|cliniques?\s+universitaires?)\s+\w+/g, '');
-  text = text.replace(/\b(lubumbashi|kinshasa|sendwe|bukavu|goma|kisangani|mbuji.?mayi|kananga)\b/gi, '');
-  text = text.replace(/\b(rdc|congo|afrique)\b/gi, 'Africa');
+  
+  // Step 1: Replace compound phrases FIRST (before removing filler words)
+  for (const [fr, en] of frenchPhrases) {
+    text = text.replace(new RegExp(fr.replace(/'/g, "[''']"), 'gi'), en);
+  }
+  
+  // Step 2: Remove location names, hospital names, dates
+  text = text.replace(/(?:hopital|hôpital|cliniques?\s+universitaires?)\s+\w+/gi, '');
+  text = text.replace(/\b(?:lubumbashi|kinshasa|sendwe|bukavu|goma|kisangani|mbuji.?mayi|kananga|katanga)\b/gi, '');
   text = text.replace(/\b\d{4}\b/g, '');
   text = text.replace(/[:\-,;]/g, ' ');
-
-  // Replace compound phrases first
-  for (const [fr, en] of frenchPhrases) {
-    text = text.replace(new RegExp(fr, 'gi'), en);
-  }
-  // Then individual words
+  
+  // Step 3: Remove French filler words AFTER compound phrase matching
+  text = text.replace(/\b(?:à|au|aux|en|de|du|des|la|le|les|un|une|et|ou|sur|dans|par|pour|avec|sans)\b/g, ' ');
+  text = text.replace(/['''](?=\s|$)/g, ' '); // Remove orphan apostrophes
+  text = text.replace(/[dl]['''][a-zéèêëàâäùûüôöîïç]+/gi, (match) => {
+    // Handle l'humeur, d'étude etc. - extract the word after apostrophe
+    const word = match.replace(/^[dl][''']/i, '');
+    return frenchWords[word] || word;
+  });
+  
+  // Step 4: Translate remaining individual words
   for (const [fr, en] of Object.entries(frenchWords)) {
     text = text.replace(new RegExp(`\\b${fr}\\b`, 'gi'), en);
   }
+  
+  // Step 5: Add "Africa" context for better results
+  if (!/africa/i.test(text)) {
+    text += ' Africa';
+  }
+  
   // Clean up
   return text.replace(/\s+/g, ' ').trim();
 }
