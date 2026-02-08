@@ -184,73 +184,311 @@ serve(async (req) => {
 
 // ==================== ACADEMIC REFERENCE SEARCH ====================
 
+// French compound medical phrases → English (order: longest first for correct matching)
+const frenchPhrases: [string, string][] = [
+  ['trouble de l\'humeur', 'mood disorder'],
+  ['trouble bipolaire', 'bipolar disorder'],
+  ['trouble dépressif majeur', 'major depressive disorder'],
+  ['trouble de stress post-traumatique', 'post-traumatic stress disorder'],
+  ['trouble de la personnalité', 'personality disorder'],
+  ['trouble anxieux', 'anxiety disorder'],
+  ['trouble obsessionnel compulsif', 'obsessive compulsive disorder'],
+  ['trouble du spectre autistique', 'autism spectrum disorder'],
+  ['prise en charge', 'management treatment'],
+  ['facteurs de risque', 'risk factors'],
+  ['soins intensifs', 'intensive care'],
+  ['accident vasculaire cérébral', 'stroke'],
+  ['insuffisance rénale', 'renal failure'],
+  ['insuffisance cardiaque', 'heart failure'],
+  ['femme enceinte', 'pregnant woman'],
+  ['personne âgée', 'elderly'],
+  ['nouveau-né', 'newborn'],
+  ['drépanocytose', 'sickle cell disease'],
+  ['césarienne', 'cesarean section'],
+  ['infection génitale', 'genital infection'],
+  ['morbi-mortalité', 'morbidity mortality'],
+];
+
+const frenchWords: Record<string, string> = {
+  'épidémiologie': 'epidemiology', 'epidemiologie': 'epidemiology',
+  'clinique': 'clinical', 'prévalence': 'prevalence', 'prevalence': 'prevalence',
+  'incidence': 'incidence', 'mortalité': 'mortality', 'mortalite': 'mortality',
+  'traitement': 'treatment', 'diagnostic': 'diagnosis',
+  'maladie': 'disease', 'profil': 'profile',
+  'fréquence': 'frequency', 'frequence': 'frequency',
+  'déterminants': 'determinants', 'determinants': 'determinants',
+  'complications': 'complications', 'pronostic': 'prognosis',
+  'survie': 'survival', 'grossesse': 'pregnancy', 'accouchement': 'delivery',
+  'hypertension': 'hypertension', 'diabète': 'diabetes', 'diabete': 'diabetes',
+  'paludisme': 'malaria', 'tuberculose': 'tuberculosis',
+  'pneumonie': 'pneumonia', 'méningite': 'meningitis', 'meningite': 'meningitis',
+  'diarrhée': 'diarrhea', 'malnutrition': 'malnutrition',
+  'obésité': 'obesity', 'obesite': 'obesity',
+  'chirurgie': 'surgery', 'cancer': 'cancer',
+  'anémie': 'anemia', 'anemie': 'anemia',
+  'dépression': 'depression', 'depression': 'depression',
+  'anxiété': 'anxiety', 'anxiete': 'anxiety',
+  'schizophrénie': 'schizophrenia', 'schizophrenie': 'schizophrenia',
+  'épilepsie': 'epilepsy', 'epilepsie': 'epilepsy',
+  'asthme': 'asthma', 'hépatite': 'hepatitis', 'hepatite': 'hepatitis',
+  'pédiatrie': 'pediatrics', 'pediatrie': 'pediatrics',
+  'néonatologie': 'neonatology', 'neonatologie': 'neonatology',
+  'gynécologie': 'gynecology', 'gynecologie': 'gynecology',
+  'obstétrique': 'obstetrics', 'obstetrique': 'obstetrics',
+  'cardiologie': 'cardiology', 'neurologie': 'neurology',
+  'psychiatrie': 'psychiatry', 'dermatologie': 'dermatology',
+  'ophtalmologie': 'ophthalmology', 'urgence': 'emergency',
+  'infection': 'infection', 'VIH': 'HIV', 'SIDA': 'AIDS',
+  'nourrisson': 'infant', 'enfant': 'child',
+  'prématurité': 'prematurity', 'prematurite': 'prematurity',
+};
+
+function translateToEnglish(frenchQuery: string): string {
+  let text = frenchQuery.toLowerCase();
+  
+  // Step 0: Normalize all apostrophe variants to standard '
+  text = text.replace(/[''ʼ`]/g, "'");
+  
+  // Step 1: Replace compound phrases FIRST (before removing filler words)
+  for (const [fr, en] of frenchPhrases) {
+    text = text.replace(new RegExp(fr, 'gi'), en);
+  }
+  
+  // Step 2: Handle remaining l'xxx and d'xxx patterns
+  text = text.replace(/[dl]'([a-zéèêëàâäùûüôöîïç]+)/gi, (_match, word) => {
+    return frenchWords[word] || word;
+  });
+  
+  // Step 3: Remove location names, hospital names, dates
+  text = text.replace(/(?:hopital|hôpital|cliniques?\s+universitaires?)\s+\w+/gi, '');
+  text = text.replace(/\b(?:lubumbashi|kinshasa|sendwe|bukavu|goma|kisangani|mbuji.?mayi|kananga|katanga)\b/gi, '');
+  text = text.replace(/\b\d{4}\b/g, '');
+  text = text.replace(/[:\-,;']/g, ' ');
+  
+  // Step 4: Remove French filler words
+  text = text.replace(/\b(?:à|au|aux|en|de|du|des|la|le|les|un|une|et|ou|sur|dans|par|pour|avec|sans)\b/g, ' ');
+  
+  // Step 5: Translate remaining individual words
+  for (const [fr, en] of Object.entries(frenchWords)) {
+    text = text.replace(new RegExp(`\\b${fr}\\b`, 'gi'), en);
+  }
+  
+  // Step 6: Add "Africa" context for better results
+  if (!/africa/i.test(text)) {
+    text += ' Africa';
+  }
+  
+  // Clean up
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function addReference(references: any[], ref: any, seenDOIs: Set<string>, seenTitles: Set<string>): boolean {
+  const doi = ref.doi || '';
+  const titleKey = (ref.title || '').toLowerCase().substring(0, 50);
+  if ((doi && seenDOIs.has(doi)) || seenTitles.has(titleKey)) return false;
+  if (doi) seenDOIs.add(doi);
+  seenTitles.add(titleKey);
+  references.push(ref);
+  return true;
+}
+
 async function searchAcademicReferences(topic: string, domain?: string): Promise<any[]> {
   const references: any[] = [];
   const seenDOIs = new Set<string>();
   const seenTitles = new Set<string>();
   
-  const searchQuery = domain ? `${topic} ${domain}` : topic;
+  const frenchQuery = domain ? `${topic} ${domain}` : topic;
+  const englishQuery = translateToEnglish(frenchQuery);
+  // Build a focused PubMed query: just the core English terms (max 5 words)
+  const pubmedQuery = englishQuery.split(' ').filter(w => w.length > 3).slice(0, 5).join(' ');
+  console.log('Search queries - FR:', frenchQuery, '| EN:', englishQuery, '| PubMed:', pubmedQuery);
 
-  // Search PubMed
-  try {
-    const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(searchQuery)}&retmax=12&retmode=json&sort=relevance`;
-    const searchResponse = await fetch(searchUrl);
-    const searchData = await searchResponse.json();
-    const ids = searchData.esearchresult?.idlist || [];
-    
-    if (ids.length > 0) {
-      const fetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${ids.join(',')}&retmode=xml`;
-      const fetchResponse = await fetch(fetchUrl);
-      const xmlText = await fetchResponse.text();
-      const pubmedRefs = parseSimplePubMedXML(xmlText);
-      
-      for (const ref of pubmedRefs) {
-        if (ref.doi) seenDOIs.add(ref.doi);
-        seenTitles.add(ref.title.toLowerCase().substring(0, 50));
-        references.push(ref);
-      }
+  // Run all searches in parallel for speed
+  const [pubmedResults, semanticResults, openAlexResults, crossRefResults] = await Promise.allSettled([
+    searchPubMed(pubmedQuery),
+    searchSemanticScholar(pubmedQuery),
+    searchOpenAlex(englishQuery, frenchQuery),
+    searchCrossRef(frenchQuery, englishQuery),
+  ]);
+
+  // Process PubMed results
+  if (pubmedResults.status === 'fulfilled') {
+    for (const ref of pubmedResults.value) {
+      addReference(references, ref, seenDOIs, seenTitles);
     }
-  } catch (e) {
-    console.error('PubMed search error in academic search:', e);
+    console.log(`PubMed: ${pubmedResults.value.length} found, ${references.length} added`);
+  } else {
+    console.error('PubMed search failed:', pubmedResults.reason);
   }
 
-  // Search Semantic Scholar
-  try {
-    const ssUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(searchQuery)}&limit=12&fields=title,authors,year,journal,externalIds`;
-    const ssResponse = await fetch(ssUrl);
-    
-    if (ssResponse.ok) {
-      const ssData = await ssResponse.json();
+  // Process Semantic Scholar results
+  if (semanticResults.status === 'fulfilled') {
+    const before = references.length;
+    for (const ref of semanticResults.value) {
+      addReference(references, ref, seenDOIs, seenTitles);
+    }
+    console.log(`Semantic Scholar: ${semanticResults.value.length} found, ${references.length - before} new`);
+  } else {
+    console.error('Semantic Scholar failed:', semanticResults.reason);
+  }
+
+  // Process OpenAlex results (Google Scholar alternative)
+  if (openAlexResults.status === 'fulfilled') {
+    const before = references.length;
+    for (const ref of openAlexResults.value) {
+      addReference(references, ref, seenDOIs, seenTitles);
+    }
+    console.log(`OpenAlex: ${openAlexResults.value.length} found, ${references.length - before} new`);
+  } else {
+    console.error('OpenAlex failed:', openAlexResults.reason);
+  }
+
+  // Process CrossRef results (good for francophone journals)
+  if (crossRefResults.status === 'fulfilled') {
+    const before = references.length;
+    for (const ref of crossRefResults.value) {
+      addReference(references, ref, seenDOIs, seenTitles);
+    }
+    console.log(`CrossRef: ${crossRefResults.value.length} found, ${references.length - before} new`);
+  } else {
+    console.error('CrossRef failed:', crossRefResults.reason);
+  }
+
+  console.log(`Total unique references found: ${references.length}`);
+  return references;
+}
+
+// ==================== PUBMED SEARCH ====================
+
+async function searchPubMed(query: string): Promise<any[]> {
+  const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=10&retmode=json&sort=relevance`;
+  const searchResponse = await fetch(searchUrl);
+  const searchData = await searchResponse.json();
+  const ids = searchData.esearchresult?.idlist || [];
+  if (ids.length === 0) return [];
+
+  const fetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${ids.join(',')}&retmode=xml`;
+  const fetchResponse = await fetch(fetchUrl);
+  const xmlText = await fetchResponse.text();
+  return parseSimplePubMedXML(xmlText);
+}
+
+// ==================== SEMANTIC SCHOLAR SEARCH ====================
+
+async function searchSemanticScholar(query: string): Promise<any[]> {
+  const ssUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(query)}&limit=10&fields=title,authors,year,journal,externalIds`;
+  const ssResponse = await fetch(ssUrl);
+  if (!ssResponse.ok) return [];
+  
+  const ssData = await ssResponse.json();
+  const results: any[] = [];
+  
+  if (ssData.data) {
+    for (const paper of ssData.data) {
+      results.push({
+        id: crypto.randomUUID(),
+        type: 'article',
+        authors: paper.authors?.map((a: any) => a.name) || [],
+        year: paper.year?.toString() || '',
+        title: paper.title || '',
+        journal: paper.journal?.name || '',
+        doi: paper.externalIds?.DOI || '',
+        pmid: paper.externalIds?.PubMed || '',
+      });
+    }
+  }
+  return results;
+}
+
+// ==================== OPENALEX SEARCH (Google Scholar Alternative) ====================
+
+async function searchOpenAlex(englishQuery: string, frenchQuery: string): Promise<any[]> {
+  const results: any[] = [];
+
+  // Search with English query first, then French
+  for (const query of [englishQuery, frenchQuery]) {
+    try {
+      const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=8&sort=relevance_score:desc&filter=type:article&select=id,doi,title,authorships,publication_year,primary_location,biblio`;
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'SaidiStat/1.0 (mailto:contact@saidistat.com)' }
+      });
+      if (!response.ok) continue;
       
-      if (ssData.data) {
-        for (const paper of ssData.data) {
-          const doi = paper.externalIds?.DOI || '';
-          const titleKey = (paper.title || '').toLowerCase().substring(0, 50);
-          
-          // Skip duplicates
-          if ((doi && seenDOIs.has(doi)) || seenTitles.has(titleKey)) continue;
-          
-          if (doi) seenDOIs.add(doi);
-          seenTitles.add(titleKey);
-          
-          references.push({
+      const data = await response.json();
+      if (!data.results) continue;
+
+      for (const work of data.results) {
+        const doi = work.doi?.replace('https://doi.org/', '') || '';
+        const authors = work.authorships?.map((a: any) => a.author?.display_name || '').filter((n: string) => n) || [];
+        const journal = work.primary_location?.source?.display_name || '';
+        const title = typeof work.title === 'string' ? work.title : '';
+
+        if (title && authors.length > 0) {
+          results.push({
             id: crypto.randomUUID(),
             type: 'article',
-            authors: paper.authors?.map((a: any) => a.name) || [],
-            year: paper.year?.toString() || '',
-            title: paper.title || '',
-            journal: paper.journal?.name || '',
+            authors,
+            year: work.publication_year?.toString() || '',
+            title,
+            journal,
+            volume: work.biblio?.volume || '',
+            issue: work.biblio?.issue || '',
+            pages: work.biblio?.first_page && work.biblio?.last_page
+              ? `${work.biblio.first_page}-${work.biblio.last_page}` : work.biblio?.first_page || '',
             doi,
-            pmid: paper.externalIds?.PubMed || '',
           });
         }
       }
+    } catch (e) {
+      console.error(`OpenAlex search error for "${query}":`, e);
     }
-  } catch (e) {
-    console.error('Semantic Scholar search error:', e);
   }
 
-  return references;
+  return results;
+}
+
+// ==================== CROSSREF SEARCH (Francophone journals) ====================
+
+async function searchCrossRef(frenchQuery: string, englishQuery: string): Promise<any[]> {
+  const results: any[] = [];
+
+  for (const query of [frenchQuery, englishQuery]) {
+    try {
+      const url = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=8&sort=relevance&order=desc&filter=type:journal-article`;
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'SaidiStat/1.0 (mailto:contact@saidistat.com)' }
+      });
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const items = data.message?.items || [];
+
+      for (const item of items) {
+        const authors = item.author?.map((a: any) => `${a.given || ''} ${a.family || ''}`.trim()) || [];
+        const title = item.title?.[0] || '';
+        const doi = item.DOI || '';
+
+        if (title && authors.length > 0) {
+          results.push({
+            id: crypto.randomUUID(),
+            type: 'article',
+            authors,
+            year: item.published?.['date-parts']?.[0]?.[0]?.toString() || item['published-print']?.['date-parts']?.[0]?.[0]?.toString() || '',
+            title,
+            journal: item['container-title']?.[0] || '',
+            volume: item.volume || '',
+            issue: item.issue || '',
+            pages: item.page || '',
+            doi,
+          });
+        }
+      }
+    } catch (e) {
+      console.error(`CrossRef search error for "${query}":`, e);
+    }
+  }
+
+  return results;
 }
 
 function buildRealReferencesPrompt(refs: any[]): string {
