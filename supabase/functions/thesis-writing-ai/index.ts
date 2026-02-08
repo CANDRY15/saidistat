@@ -246,32 +246,34 @@ const frenchWords: Record<string, string> = {
 function translateToEnglish(frenchQuery: string): string {
   let text = frenchQuery.toLowerCase();
   
+  // Step 0: Normalize all apostrophe variants to standard '
+  text = text.replace(/[''ʼ`]/g, "'");
+  
   // Step 1: Replace compound phrases FIRST (before removing filler words)
   for (const [fr, en] of frenchPhrases) {
-    text = text.replace(new RegExp(fr.replace(/'/g, "[''']"), 'gi'), en);
+    text = text.replace(new RegExp(fr, 'gi'), en);
   }
   
-  // Step 2: Remove location names, hospital names, dates
-  text = text.replace(/(?:hopital|hôpital|cliniques?\s+universitaires?)\s+\w+/gi, '');
-  text = text.replace(/\b(?:lubumbashi|kinshasa|sendwe|bukavu|goma|kisangani|mbuji.?mayi|kananga|katanga)\b/gi, '');
-  text = text.replace(/\b\d{4}\b/g, '');
-  text = text.replace(/[:\-,;]/g, ' ');
-  
-  // Step 3: Remove French filler words AFTER compound phrase matching
-  text = text.replace(/\b(?:à|au|aux|en|de|du|des|la|le|les|un|une|et|ou|sur|dans|par|pour|avec|sans)\b/g, ' ');
-  text = text.replace(/['''](?=\s|$)/g, ' '); // Remove orphan apostrophes
-  text = text.replace(/[dl]['''][a-zéèêëàâäùûüôöîïç]+/gi, (match) => {
-    // Handle l'humeur, d'étude etc. - extract the word after apostrophe
-    const word = match.replace(/^[dl][''']/i, '');
+  // Step 2: Handle remaining l'xxx and d'xxx patterns
+  text = text.replace(/[dl]'([a-zéèêëàâäùûüôöîïç]+)/gi, (_match, word) => {
     return frenchWords[word] || word;
   });
   
-  // Step 4: Translate remaining individual words
+  // Step 3: Remove location names, hospital names, dates
+  text = text.replace(/(?:hopital|hôpital|cliniques?\s+universitaires?)\s+\w+/gi, '');
+  text = text.replace(/\b(?:lubumbashi|kinshasa|sendwe|bukavu|goma|kisangani|mbuji.?mayi|kananga|katanga)\b/gi, '');
+  text = text.replace(/\b\d{4}\b/g, '');
+  text = text.replace(/[:\-,;']/g, ' ');
+  
+  // Step 4: Remove French filler words
+  text = text.replace(/\b(?:à|au|aux|en|de|du|des|la|le|les|un|une|et|ou|sur|dans|par|pour|avec|sans)\b/g, ' ');
+  
+  // Step 5: Translate remaining individual words
   for (const [fr, en] of Object.entries(frenchWords)) {
     text = text.replace(new RegExp(`\\b${fr}\\b`, 'gi'), en);
   }
   
-  // Step 5: Add "Africa" context for better results
+  // Step 6: Add "Africa" context for better results
   if (!/africa/i.test(text)) {
     text += ' Africa';
   }
