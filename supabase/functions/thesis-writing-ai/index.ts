@@ -299,12 +299,14 @@ async function searchAcademicReferences(topic: string, domain?: string): Promise
   
   const frenchQuery = domain ? `${topic} ${domain}` : topic;
   const englishQuery = translateToEnglish(frenchQuery);
-  console.log('Search queries - FR:', frenchQuery, '| EN:', englishQuery);
+  // Build a focused PubMed query: just the core English terms (max 5 words)
+  const pubmedQuery = englishQuery.split(' ').filter(w => w.length > 3).slice(0, 5).join(' ');
+  console.log('Search queries - FR:', frenchQuery, '| EN:', englishQuery, '| PubMed:', pubmedQuery);
 
   // Run all searches in parallel for speed
   const [pubmedResults, semanticResults, openAlexResults, crossRefResults] = await Promise.allSettled([
-    searchPubMed(englishQuery),
-    searchSemanticScholar(englishQuery),
+    searchPubMed(pubmedQuery),
+    searchSemanticScholar(pubmedQuery),
     searchOpenAlex(englishQuery, frenchQuery),
     searchCrossRef(frenchQuery, englishQuery),
   ]);
