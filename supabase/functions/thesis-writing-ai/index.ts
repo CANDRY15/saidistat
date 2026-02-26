@@ -447,14 +447,64 @@ async function searchOpenAlex(englishQuery: string, frenchQuery: string): Promis
   return results;
 }
 
-// ==================== CROSSREF SEARCH (Francophone journals) ====================
+// ==================== CROSSREF SEARCH (Francophone journals, medical-filtered) ====================
+
+// Medical/health subject categories and journal keywords for filtering
+const MEDICAL_SUBJECTS = new Set([
+  'medicine', 'health', 'public health', 'epidemiology', 'surgery', 'pediatrics',
+  'pharmacology', 'nursing', 'dentistry', 'neurology', 'cardiology', 'oncology',
+  'psychiatry', 'dermatology', 'ophthalmology', 'radiology', 'pathology',
+  'immunology', 'microbiology', 'parasitology', 'infectious diseases',
+  'obstetrics', 'gynecology', 'anesthesiology', 'biochemistry', 'genetics',
+  'nutrition', 'toxicology', 'rehabilitation', 'tropical medicine',
+  'general medicine', 'internal medicine', 'family practice',
+]);
+
+const MEDICAL_JOURNAL_KEYWORDS = [
+  'med', 'health', 'clin', 'surg', 'pediatr', 'pharm', 'nurs', 'dent',
+  'neur', 'cardio', 'oncol', 'psych', 'dermat', 'ophthal', 'radiol',
+  'pathol', 'immun', 'microbiol', 'parasit', 'infect', 'obstet', 'gynec',
+  'anesth', 'biochem', 'genet', 'nutr', 'toxicol', 'rehab', 'trop',
+  'epidemiol', 'biostat', 'santé', 'médec', 'chirurg', 'hôpit', 'hopit',
+  'thérap', 'diagnost', 'anatomie', 'physiolog', 'lancet', 'bmj', 'jama',
+  'annals', 'archives', 'journal of', 'revue', 'african', 'pan afr',
+];
+
+function isMedicalArticle(item: any): boolean {
+  // Check CrossRef subject categories
+  const subjects = (item.subject || []).map((s: string) => s.toLowerCase());
+  for (const s of subjects) {
+    for (const med of MEDICAL_SUBJECTS) {
+      if (s.includes(med)) return true;
+    }
+  }
+
+  // Check journal name for medical keywords
+  const journal = (item['container-title']?.[0] || '').toLowerCase();
+  if (journal && MEDICAL_JOURNAL_KEYWORDS.some(kw => journal.includes(kw))) return true;
+
+  // Check title for obvious medical terms
+  const title = (item.title?.[0] || '').toLowerCase();
+  const medicalTitleTerms = [
+    'patient', 'clinical', 'hospital', 'disease', 'treatment', 'diagnosis',
+    'epidemiol', 'prevalence', 'incidence', 'mortality', 'morbidity',
+    'surgery', 'therapy', 'infection', 'syndrome', 'cancer', 'tumor',
+    'maladie', 'traitement', 'hôpital', 'clinique', 'épidémiol',
+    'prévalence', 'mortalité', 'chirurgie', 'thérapie', 'diagnostic',
+  ];
+  if (medicalTitleTerms.some(t => title.includes(t))) return true;
+
+  // If no subject and no journal match, reject
+  return false;
+}
 
 async function searchCrossRef(frenchQuery: string, englishQuery: string): Promise<any[]> {
   const results: any[] = [];
 
   for (const query of [frenchQuery, englishQuery]) {
     try {
-      const url = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=8&sort=relevance&order=desc&filter=type:journal-article`;
+      // Request more rows so we have enough after filtering
+      const url = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=20&sort=relevance&order=desc&filter=type:journal-article&select=DOI,title,author,published,published-print,container-title,volume,issue,page,subject,score`;
       const response = await fetch(url, {
         headers: { 'User-Agent': 'SaidiStat/1.0 (mailto:contact@saidistat.com)' }
       });
@@ -464,11 +514,14 @@ async function searchCrossRef(frenchQuery: string, englishQuery: string): Promis
       const items = data.message?.items || [];
 
       for (const item of items) {
+        // Filter out non-medical articles
+        if (!isMedicalArticle(item)) continue;
+
         const authors = item.author?.map((a: any) => `${a.given || ''} ${a.family || ''}`.trim()) || [];
         const title = item.title?.[0] || '';
         const doi = item.DOI || '';
 
-        if (title && authors.length > 0) {
+        if (title && authors.length > 0 && results.length < 10) {
           results.push({
             id: crypto.randomUUID(),
             type: 'article',
@@ -488,6 +541,7 @@ async function searchCrossRef(frenchQuery: string, englishQuery: string): Promis
     }
   }
 
+  console.log(`CrossRef: ${results.length} medical articles retained after filtering`);
   return results;
 }
 
