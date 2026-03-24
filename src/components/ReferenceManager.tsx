@@ -683,6 +683,9 @@ const ReferenceManager = ({
                               {ref.journal && (
                                 <p className="text-xs text-muted-foreground italic">{ref.journal}</p>
                               )}
+                              {(ref as any).source && (
+                                <Badge variant="outline" className="text-xs mt-1">{(ref as any).source}</Badge>
+                              )}
                               {ref.pmid && (
                                 <p className="text-xs text-muted-foreground">PMID: {ref.pmid}</p>
                               )}
