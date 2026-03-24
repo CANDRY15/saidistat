@@ -222,13 +222,25 @@ const ReferenceManager = ({
   const [activeTab, setActiveTab] = useState('list');
   const zoteroInputRef = useRef<HTMLInputElement>(null);
   
-  // DOI/PubMed import states
-  const [doiInput, setDoiInput] = useState('');
-  const [pubmedQuery, setPubmedQuery] = useState('');
+  // Unified search state
+  const [searchInput, setSearchInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<Reference[]>([]);
   const [doiPreview, setDoiPreview] = useState<Reference | null>(null);
   const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set());
+  const [searchMode, setSearchMode] = useState<'auto' | 'doi' | 'pubmed'>('auto');
+
+  // Auto-detect if input is a DOI
+  const isDOI = (input: string): boolean => {
+    const trimmed = input.trim();
+    return /^10\.\d{4,}\//.test(trimmed) || 
+           /^https?:\/\/doi\.org\//.test(trimmed) ||
+           /^doi:/.test(trimmed.toLowerCase()) ||
+           // Multiple DOIs
+           trimmed.split(/[\n,]/).every(d => d.trim() === '' || /^10\.\d{4,}\//.test(d.trim()) || /^https?:\/\/doi\.org\//.test(d.trim()));
+  };
+
+  const detectedMode = searchMode !== 'auto' ? searchMode : (isDOI(searchInput) ? 'doi' : 'pubmed');
   
   const [newRef, setNewRef] = useState<Partial<Reference>>({
     type: 'article',
@@ -253,55 +265,74 @@ const ReferenceManager = ({
     thesis: 'Thèse',
   };
 
-  // Fetch reference from DOI with preview
-  const fetchFromDOI = async (addDirectly = false) => {
-    if (!doiInput.trim()) {
-      toast.error("Veuillez entrer un DOI");
+  // Unified search handler
+  const handleUnifiedSearch = async () => {
+    if (!searchInput.trim()) {
+      toast.error("Veuillez entrer une recherche");
       return;
     }
 
-    setIsSearching(true);
-    setDoiPreview(null);
-    try {
-      // Support multiple DOIs separated by newlines or commas
-      const dois = doiInput.split(/[\n,]/).map(d => d.trim()).filter(Boolean);
-      
-      for (const doi of dois) {
+    if (detectedMode === 'doi') {
+      // DOI mode
+      setIsSearching(true);
+      setDoiPreview(null);
+      setSearchResults([]);
+      try {
+        const dois = searchInput.split(/[\n,]/).map(d => d.trim()).filter(Boolean);
+        
+        for (const doi of dois) {
+          const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
+            body: { action: 'fetch_doi', doi: doi }
+          });
+
+          if (error) throw error;
+          if (data.error) { toast.error(`DOI ${doi}: ${data.error}`); continue; }
+
+          if (data.reference) {
+            if (dois.length > 1) {
+              if (!references.some(r => r.doi === data.reference.doi)) {
+                onReferencesChange([...references, data.reference]);
+                toast.success(`Référence importée: ${data.reference.title?.substring(0, 50)}...`);
+              } else {
+                toast.info(`DOI ${doi} déjà dans la liste`);
+              }
+            } else {
+              setDoiPreview(data.reference);
+            }
+          }
+        }
+        if (dois.length > 1) setSearchInput('');
+      } catch (error: any) {
+        console.error('DOI fetch error:', error);
+        toast.error("Erreur lors de l'import du DOI");
+      } finally {
+        setIsSearching(false);
+      }
+    } else {
+      // PubMed keyword mode
+      setIsSearching(true);
+      setSearchResults([]);
+      setDoiPreview(null);
+      try {
         const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
-          body: { action: 'fetch_doi', doi: doi }
+          body: { action: 'search_pubmed', pubmedQuery: searchInput.trim() }
         });
 
         if (error) throw error;
-        
-        if (data.error) {
-          toast.error(`DOI ${doi}: ${data.error}`);
-          continue;
-        }
+        if (data.error) { toast.error(data.error); return; }
 
-        if (data.reference) {
-          if (addDirectly || dois.length > 1) {
-            // Check for duplicates
-            if (!references.some(r => r.doi === data.reference.doi)) {
-              onReferencesChange([...references, data.reference]);
-              toast.success(`Référence importée: ${data.reference.title?.substring(0, 50)}...`);
-            } else {
-              toast.info(`DOI ${doi} déjà dans la liste`);
-            }
-          } else {
-            // Show preview for single DOI
-            setDoiPreview(data.reference);
-          }
+        if (data.references && data.references.length > 0) {
+          setSearchResults(data.references);
+          toast.success(`${data.references.length} références trouvées`);
+        } else {
+          toast.info("Aucune référence trouvée");
         }
+      } catch (error: any) {
+        console.error('PubMed search error:', error);
+        toast.error("Erreur lors de la recherche PubMed");
+      } finally {
+        setIsSearching(false);
       }
-      
-      if (addDirectly || dois.length > 1) {
-        setDoiInput('');
-      }
-    } catch (error: any) {
-      console.error('DOI fetch error:', error);
-      toast.error("Erreur lors de l'import du DOI");
-    } finally {
-      setIsSearching(false);
     }
   };
 
@@ -315,42 +346,7 @@ const ReferenceManager = ({
         toast.info("Cette référence est déjà dans la liste");
       }
       setDoiPreview(null);
-      setDoiInput('');
-    }
-  };
-
-  // Search PubMed
-  const searchPubMed = async () => {
-    if (!pubmedQuery.trim()) {
-      toast.error("Veuillez entrer une recherche");
-      return;
-    }
-
-    setIsSearching(true);
-    setSearchResults([]);
-    try {
-      const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
-        body: { action: 'search_pubmed', pubmedQuery: pubmedQuery.trim() }
-      });
-
-      if (error) throw error;
-      
-      if (data.error) {
-        toast.error(data.error);
-        return;
-      }
-
-      if (data.references && data.references.length > 0) {
-        setSearchResults(data.references);
-        toast.success(`${data.references.length} références trouvées`);
-      } else {
-        toast.info("Aucune référence trouvée");
-      }
-    } catch (error: any) {
-      console.error('PubMed search error:', error);
-      toast.error("Erreur lors de la recherche PubMed");
-    } finally {
-      setIsSearching(false);
+      setSearchInput('');
     }
   };
 
@@ -510,34 +506,35 @@ const ReferenceManager = ({
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="list">Liste</TabsTrigger>
-            <TabsTrigger value="import">DOI</TabsTrigger>
-            <TabsTrigger value="pubmed">PubMed</TabsTrigger>
+            <TabsTrigger value="search">Recherche</TabsTrigger>
             <TabsTrigger value="zotero">Zotero</TabsTrigger>
             <TabsTrigger value="formatted">Aperçu</TabsTrigger>
           </TabsList>
 
-          {/* Import DOI Tab */}
-          <TabsContent value="import" className="space-y-4">
+          {/* Unified Search Tab (DOI + PubMed) */}
+          <TabsContent value="search" className="space-y-4">
             <div className="space-y-3">
-              <Label>Importer depuis DOI</Label>
+              <div className="flex items-center justify-between">
+                <Label>Rechercher des références</Label>
+                <Badge variant="outline" className="text-xs">
+                  {detectedMode === 'doi' ? '🔗 DOI détecté' : '🔍 Mots-clés PubMed'}
+                </Badge>
+              </div>
               <p className="text-sm text-muted-foreground">
-                Entrez un ou plusieurs DOI (séparés par des virgules ou retours à la ligne) pour importer automatiquement
+                Entrez un DOI (ex: 10.1016/...) ou des mots-clés pour rechercher sur PubMed — la détection est automatique
               </p>
               <div className="flex gap-2">
                 <Input
-                  value={doiInput}
-                  onChange={(e) => setDoiInput(e.target.value)}
-                  placeholder="10.1016/j.xxx.2023.xxx ou https://doi.org/..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="10.1016/j.xxx.2023.xxx ou preeclampsia africa 2023"
                   className="flex-1"
-                  onKeyDown={(e) => e.key === 'Enter' && fetchFromDOI(false)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleUnifiedSearch()}
                 />
-                <Button onClick={() => fetchFromDOI(false)} disabled={isSearching} title="Aperçu">
+                <Button onClick={handleUnifiedSearch} disabled={isSearching}>
                   {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                </Button>
-                <Button onClick={() => fetchFromDOI(true)} disabled={isSearching} variant="secondary" title="Ajouter directement">
-                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                 </Button>
               </div>
             </div>
@@ -569,29 +566,8 @@ const ReferenceManager = ({
                 </div>
               </div>
             )}
-          </TabsContent>
 
-          {/* PubMed Search Tab */}
-          <TabsContent value="pubmed" className="space-y-4">
-            <div className="space-y-3">
-              <Label>Rechercher sur PubMed</Label>
-              <p className="text-sm text-muted-foreground">
-                Recherchez des articles sur PubMed et sélectionnez ceux à importer
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  value={pubmedQuery}
-                  onChange={(e) => setPubmedQuery(e.target.value)}
-                  placeholder="ex: preeclampsia africa 2023"
-                  className="flex-1"
-                  onKeyDown={(e) => e.key === 'Enter' && searchPubMed()}
-                />
-                <Button onClick={searchPubMed} disabled={isSearching}>
-                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                </Button>
-              </div>
-            </div>
-
+            {/* PubMed Search Results */}
             {searchResults.length > 0 && (
               <>
                 <div className="flex justify-between items-center">
@@ -629,7 +605,7 @@ const ReferenceManager = ({
                         toast.success(`${addedCount} référence(s) ajoutée(s)`);
                         setSelectedResults(new Set());
                         setSearchResults([]);
-                        setPubmedQuery('');
+                        setSearchInput('');
                       }}
                     >
                       <Plus className="w-4 h-4 mr-1" />
