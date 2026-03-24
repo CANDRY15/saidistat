@@ -265,55 +265,74 @@ const ReferenceManager = ({
     thesis: 'Thèse',
   };
 
-  // Fetch reference from DOI with preview
-  const fetchFromDOI = async (addDirectly = false) => {
-    if (!doiInput.trim()) {
-      toast.error("Veuillez entrer un DOI");
+  // Unified search handler
+  const handleUnifiedSearch = async () => {
+    if (!searchInput.trim()) {
+      toast.error("Veuillez entrer une recherche");
       return;
     }
 
-    setIsSearching(true);
-    setDoiPreview(null);
-    try {
-      // Support multiple DOIs separated by newlines or commas
-      const dois = doiInput.split(/[\n,]/).map(d => d.trim()).filter(Boolean);
-      
-      for (const doi of dois) {
+    if (detectedMode === 'doi') {
+      // DOI mode
+      setIsSearching(true);
+      setDoiPreview(null);
+      setSearchResults([]);
+      try {
+        const dois = searchInput.split(/[\n,]/).map(d => d.trim()).filter(Boolean);
+        
+        for (const doi of dois) {
+          const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
+            body: { action: 'fetch_doi', doi: doi }
+          });
+
+          if (error) throw error;
+          if (data.error) { toast.error(`DOI ${doi}: ${data.error}`); continue; }
+
+          if (data.reference) {
+            if (dois.length > 1) {
+              if (!references.some(r => r.doi === data.reference.doi)) {
+                onReferencesChange([...references, data.reference]);
+                toast.success(`Référence importée: ${data.reference.title?.substring(0, 50)}...`);
+              } else {
+                toast.info(`DOI ${doi} déjà dans la liste`);
+              }
+            } else {
+              setDoiPreview(data.reference);
+            }
+          }
+        }
+        if (dois.length > 1) setSearchInput('');
+      } catch (error: any) {
+        console.error('DOI fetch error:', error);
+        toast.error("Erreur lors de l'import du DOI");
+      } finally {
+        setIsSearching(false);
+      }
+    } else {
+      // PubMed keyword mode
+      setIsSearching(true);
+      setSearchResults([]);
+      setDoiPreview(null);
+      try {
         const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
-          body: { action: 'fetch_doi', doi: doi }
+          body: { action: 'search_pubmed', pubmedQuery: searchInput.trim() }
         });
 
         if (error) throw error;
-        
-        if (data.error) {
-          toast.error(`DOI ${doi}: ${data.error}`);
-          continue;
-        }
+        if (data.error) { toast.error(data.error); return; }
 
-        if (data.reference) {
-          if (addDirectly || dois.length > 1) {
-            // Check for duplicates
-            if (!references.some(r => r.doi === data.reference.doi)) {
-              onReferencesChange([...references, data.reference]);
-              toast.success(`Référence importée: ${data.reference.title?.substring(0, 50)}...`);
-            } else {
-              toast.info(`DOI ${doi} déjà dans la liste`);
-            }
-          } else {
-            // Show preview for single DOI
-            setDoiPreview(data.reference);
-          }
+        if (data.references && data.references.length > 0) {
+          setSearchResults(data.references);
+          toast.success(`${data.references.length} références trouvées`);
+        } else {
+          toast.info("Aucune référence trouvée");
         }
+      } catch (error: any) {
+        console.error('PubMed search error:', error);
+        toast.error("Erreur lors de la recherche PubMed");
+      } finally {
+        setIsSearching(false);
       }
-      
-      if (addDirectly || dois.length > 1) {
-        setDoiInput('');
-      }
-    } catch (error: any) {
-      console.error('DOI fetch error:', error);
-      toast.error("Erreur lors de l'import du DOI");
-    } finally {
-      setIsSearching(false);
     }
   };
 
@@ -327,7 +346,7 @@ const ReferenceManager = ({
         toast.info("Cette référence est déjà dans la liste");
       }
       setDoiPreview(null);
-      setDoiInput('');
+      setSearchInput('');
     }
   };
 
