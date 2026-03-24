@@ -528,18 +528,37 @@ const ReferenceManager = ({
             <TabsTrigger value="formatted">Aperçu</TabsTrigger>
           </TabsList>
 
-          {/* Unified Search Tab (DOI + PubMed) */}
+          {/* Unified Search Tab (DOI + PubMed + CrossRef + OpenAlex) */}
           <TabsContent value="search" className="space-y-4">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label>Rechercher des références</Label>
                 <Badge variant="outline" className="text-xs">
-                  {detectedMode === 'doi' ? '🔗 DOI détecté' : '🔍 Mots-clés PubMed'}
+                  {detectedMode === 'doi' ? '🔗 DOI détecté' : '🔍 Recherche par mots-clés'}
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground">
-                Entrez un DOI (ex: 10.1016/...) ou des mots-clés pour rechercher sur PubMed — la détection est automatique
+                Entrez un DOI ou des mots-clés — la détection est automatique
               </p>
+              {detectedMode === 'keywords' && (
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-xs text-muted-foreground self-center">Sources :</span>
+                  {[
+                    { id: 'pubmed', label: 'PubMed', icon: '🏥' },
+                    { id: 'crossref', label: 'CrossRef', icon: '📚' },
+                    { id: 'openalex', label: 'OpenAlex', icon: '🔬' },
+                  ].map(src => (
+                    <Badge
+                      key={src.id}
+                      variant={searchSources.has(src.id) ? 'default' : 'outline'}
+                      className="cursor-pointer select-none"
+                      onClick={() => toggleSource(src.id)}
+                    >
+                      {src.icon} {src.label}
+                    </Badge>
+                  ))}
+                </div>
+              )}
               <div className="flex gap-2">
                 <Input
                   value={searchInput}
