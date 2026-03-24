@@ -320,13 +320,17 @@ const ReferenceManager = ({
         setIsSearching(false);
       }
     } else {
-      // PubMed keyword mode
+      // Multi-source keyword search
       setIsSearching(true);
       setSearchResults([]);
       setDoiPreview(null);
       try {
         const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
-          body: { action: 'search_pubmed', pubmedQuery: searchInput.trim() }
+          body: { 
+            action: 'search_multi', 
+            pubmedQuery: searchInput.trim(),
+            sources: Array.from(searchSources)
+          }
         });
 
         if (error) throw error;
@@ -339,8 +343,8 @@ const ReferenceManager = ({
           toast.info("Aucune référence trouvée");
         }
       } catch (error: any) {
-        console.error('PubMed search error:', error);
-        toast.error("Erreur lors de la recherche PubMed");
+        console.error('Multi search error:', error);
+        toast.error("Erreur lors de la recherche");
       } finally {
         setIsSearching(false);
       }
