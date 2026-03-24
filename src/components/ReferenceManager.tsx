@@ -350,41 +350,6 @@ const ReferenceManager = ({
     }
   };
 
-  // Search PubMed
-  const searchPubMed = async () => {
-    if (!pubmedQuery.trim()) {
-      toast.error("Veuillez entrer une recherche");
-      return;
-    }
-
-    setIsSearching(true);
-    setSearchResults([]);
-    try {
-      const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
-        body: { action: 'search_pubmed', pubmedQuery: pubmedQuery.trim() }
-      });
-
-      if (error) throw error;
-      
-      if (data.error) {
-        toast.error(data.error);
-        return;
-      }
-
-      if (data.references && data.references.length > 0) {
-        setSearchResults(data.references);
-        toast.success(`${data.references.length} références trouvées`);
-      } else {
-        toast.info("Aucune référence trouvée");
-      }
-    } catch (error: any) {
-      console.error('PubMed search error:', error);
-      toast.error("Erreur lors de la recherche PubMed");
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
   const addSearchResult = (ref: Reference) => {
     // Check if already added
     if (references.some(r => r.pmid === ref.pmid || (ref.doi && r.doi === ref.doi))) {
