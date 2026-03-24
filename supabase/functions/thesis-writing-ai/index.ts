@@ -7,7 +7,8 @@ const corsHeaders = {
 };
 
 interface ThesisRequest {
-  action: 'generate_introduction' | 'generate_theoretical' | 'generate_methodology' | 'generate_discussion' | 'generate_conclusion' | 'analyze_data' | 'improve_text' | 'fetch_doi' | 'search_pubmed' | 'search_academic_references';
+  action: 'generate_introduction' | 'generate_theoretical' | 'generate_methodology' | 'generate_discussion' | 'generate_conclusion' | 'analyze_data' | 'improve_text' | 'fetch_doi' | 'search_pubmed' | 'search_multi' | 'search_academic_references';
+  sources?: string[];
   topic?: string;
   studyType?: string;
   section?: string;
