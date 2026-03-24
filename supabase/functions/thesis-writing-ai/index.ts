@@ -52,6 +52,11 @@ serve(async (req) => {
       return await handlePubMedSearch(request.pubmedQuery);
     }
 
+    // Handle multi-source search (PubMed + CrossRef + OpenAlex)
+    if (request.action === 'search_multi' && request.pubmedQuery) {
+      return await handleMultiSearch(request.pubmedQuery, request.sources || ['pubmed', 'crossref', 'openalex']);
+    }
+
     // Handle academic reference search
     if (request.action === 'search_academic_references' && request.topic) {
       const refs = await searchAcademicReferences(request.topic, request.context?.domain);
