@@ -228,7 +228,7 @@ const ReferenceManager = ({
   const [searchResults, setSearchResults] = useState<Reference[]>([]);
   const [doiPreview, setDoiPreview] = useState<Reference | null>(null);
   const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set());
-  const [searchMode, setSearchMode] = useState<'auto' | 'doi' | 'pubmed'>('auto');
+  const [searchSources, setSearchSources] = useState<Set<string>>(new Set(['pubmed', 'crossref', 'openalex']));
 
   // Auto-detect if input is a DOI
   const isDOI = (input: string): boolean => {
@@ -236,11 +236,22 @@ const ReferenceManager = ({
     return /^10\.\d{4,}\//.test(trimmed) || 
            /^https?:\/\/doi\.org\//.test(trimmed) ||
            /^doi:/.test(trimmed.toLowerCase()) ||
-           // Multiple DOIs
            trimmed.split(/[\n,]/).every(d => d.trim() === '' || /^10\.\d{4,}\//.test(d.trim()) || /^https?:\/\/doi\.org\//.test(d.trim()));
   };
 
-  const detectedMode = searchMode !== 'auto' ? searchMode : (isDOI(searchInput) ? 'doi' : 'pubmed');
+  const detectedMode = isDOI(searchInput) ? 'doi' : 'keywords';
+
+  const toggleSource = (source: string) => {
+    setSearchSources(prev => {
+      const next = new Set(prev);
+      if (next.has(source)) {
+        if (next.size > 1) next.delete(source);
+      } else {
+        next.add(source);
+      }
+      return next;
+    });
+  };
   
   const [newRef, setNewRef] = useState<Partial<Reference>>({
     type: 'article',
@@ -309,13 +320,17 @@ const ReferenceManager = ({
         setIsSearching(false);
       }
     } else {
-      // PubMed keyword mode
+      // Multi-source keyword search
       setIsSearching(true);
       setSearchResults([]);
       setDoiPreview(null);
       try {
         const { data, error } = await supabase.functions.invoke('thesis-writing-ai', {
-          body: { action: 'search_pubmed', pubmedQuery: searchInput.trim() }
+          body: { 
+            action: 'search_multi', 
+            pubmedQuery: searchInput.trim(),
+            sources: Array.from(searchSources)
+          }
         });
 
         if (error) throw error;
@@ -328,8 +343,8 @@ const ReferenceManager = ({
           toast.info("Aucune référence trouvée");
         }
       } catch (error: any) {
-        console.error('PubMed search error:', error);
-        toast.error("Erreur lors de la recherche PubMed");
+        console.error('Multi search error:', error);
+        toast.error("Erreur lors de la recherche");
       } finally {
         setIsSearching(false);
       }
@@ -513,18 +528,37 @@ const ReferenceManager = ({
             <TabsTrigger value="formatted">Aperçu</TabsTrigger>
           </TabsList>
 
-          {/* Unified Search Tab (DOI + PubMed) */}
+          {/* Unified Search Tab (DOI + PubMed + CrossRef + OpenAlex) */}
           <TabsContent value="search" className="space-y-4">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label>Rechercher des références</Label>
                 <Badge variant="outline" className="text-xs">
-                  {detectedMode === 'doi' ? '🔗 DOI détecté' : '🔍 Mots-clés PubMed'}
+                  {detectedMode === 'doi' ? '🔗 DOI détecté' : '🔍 Recherche par mots-clés'}
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground">
-                Entrez un DOI (ex: 10.1016/...) ou des mots-clés pour rechercher sur PubMed — la détection est automatique
+                Entrez un DOI ou des mots-clés — la détection est automatique
               </p>
+              {detectedMode === 'keywords' && (
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-xs text-muted-foreground self-center">Sources :</span>
+                  {[
+                    { id: 'pubmed', label: 'PubMed', icon: '🏥' },
+                    { id: 'crossref', label: 'CrossRef', icon: '📚' },
+                    { id: 'openalex', label: 'OpenAlex', icon: '🔬' },
+                  ].map(src => (
+                    <Badge
+                      key={src.id}
+                      variant={searchSources.has(src.id) ? 'default' : 'outline'}
+                      className="cursor-pointer select-none"
+                      onClick={() => toggleSource(src.id)}
+                    >
+                      {src.icon} {src.label}
+                    </Badge>
+                  ))}
+                </div>
+              )}
               <div className="flex gap-2">
                 <Input
                   value={searchInput}
@@ -648,6 +682,9 @@ const ReferenceManager = ({
                               </p>
                               {ref.journal && (
                                 <p className="text-xs text-muted-foreground italic">{ref.journal}</p>
+                              )}
+                              {(ref as any).source && (
+                                <Badge variant="outline" className="text-xs mt-1">{(ref as any).source}</Badge>
                               )}
                               {ref.pmid && (
                                 <p className="text-xs text-muted-foreground">PMID: {ref.pmid}</p>

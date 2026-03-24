@@ -7,7 +7,8 @@ const corsHeaders = {
 };
 
 interface ThesisRequest {
-  action: 'generate_introduction' | 'generate_theoretical' | 'generate_methodology' | 'generate_discussion' | 'generate_conclusion' | 'analyze_data' | 'improve_text' | 'fetch_doi' | 'search_pubmed' | 'search_academic_references';
+  action: 'generate_introduction' | 'generate_theoretical' | 'generate_methodology' | 'generate_discussion' | 'generate_conclusion' | 'analyze_data' | 'improve_text' | 'fetch_doi' | 'search_pubmed' | 'search_multi' | 'search_academic_references';
+  sources?: string[];
   topic?: string;
   studyType?: string;
   section?: string;
@@ -49,6 +50,11 @@ serve(async (req) => {
     // Handle PubMed search
     if (request.action === 'search_pubmed' && request.pubmedQuery) {
       return await handlePubMedSearch(request.pubmedQuery);
+    }
+
+    // Handle multi-source search (PubMed + CrossRef + OpenAlex)
+    if (request.action === 'search_multi' && request.pubmedQuery) {
+      return await handleMultiSearch(request.pubmedQuery, request.sources || ['pubmed', 'crossref', 'openalex']);
     }
 
     // Handle academic reference search
@@ -685,6 +691,77 @@ function parseSimplePubMedXML(xml: string): any[] {
   }
 
   return references;
+}
+
+// ==================== MULTI-SOURCE SEARCH ====================
+
+async function handleMultiSearch(query: string, sources: string[]) {
+  try {
+    const englishQuery = translateToEnglish(query);
+    const allResults: any[] = [];
+    const seenDois = new Set<string>();
+    const seenTitles = new Set<string>();
+
+    const addUnique = (ref: any) => {
+      const titleKey = (ref.title || '').toLowerCase().substring(0, 60);
+      if (ref.doi && seenDois.has(ref.doi)) return;
+      if (seenTitles.has(titleKey)) return;
+      if (ref.doi) seenDois.add(ref.doi);
+      seenTitles.add(titleKey);
+      allResults.push(ref);
+    };
+
+    const promises: Promise<void>[] = [];
+
+    if (sources.includes('pubmed')) {
+      promises.push((async () => {
+        try {
+          const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(query)}&retmax=10&retmode=json`;
+          const searchResponse = await fetch(searchUrl);
+          const searchData = await searchResponse.json();
+          const ids = searchData.esearchresult?.idlist || [];
+          if (ids.length > 0) {
+            const fetchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id=${ids.join(',')}&retmode=xml`;
+            const fetchResponse = await fetch(fetchUrl);
+            const xmlText = await fetchResponse.text();
+            const refs = parseSimplePubMedXML(xmlText);
+            refs.forEach(r => addUnique({ ...r, source: 'PubMed' }));
+          }
+        } catch (e) { console.error('PubMed error:', e); }
+      })());
+    }
+
+    if (sources.includes('crossref')) {
+      promises.push((async () => {
+        try {
+          const refs = await searchCrossRef(query, englishQuery);
+          refs.forEach(r => addUnique({ ...r, source: 'CrossRef' }));
+        } catch (e) { console.error('CrossRef error:', e); }
+      })());
+    }
+
+    if (sources.includes('openalex')) {
+      promises.push((async () => {
+        try {
+          const refs = await searchOpenAlex(englishQuery, query);
+          refs.forEach(r => addUnique({ ...r, source: 'OpenAlex' }));
+        } catch (e) { console.error('OpenAlex error:', e); }
+      })());
+    }
+
+    await Promise.all(promises);
+
+    console.log(`Multi-search: ${allResults.length} unique results from ${sources.join(', ')}`);
+
+    return new Response(JSON.stringify({ references: allResults }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error('Multi-search error:', error);
+    return new Response(JSON.stringify({ error: "Erreur lors de la recherche multi-sources" }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 }
 
 // ==================== PROMPTS ====================
