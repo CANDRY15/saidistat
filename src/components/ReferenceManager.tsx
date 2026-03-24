@@ -228,7 +228,7 @@ const ReferenceManager = ({
   const [searchResults, setSearchResults] = useState<Reference[]>([]);
   const [doiPreview, setDoiPreview] = useState<Reference | null>(null);
   const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set());
-  const [searchMode, setSearchMode] = useState<'auto' | 'doi' | 'pubmed'>('auto');
+  const [searchSources, setSearchSources] = useState<Set<string>>(new Set(['pubmed', 'crossref', 'openalex']));
 
   // Auto-detect if input is a DOI
   const isDOI = (input: string): boolean => {
@@ -236,11 +236,22 @@ const ReferenceManager = ({
     return /^10\.\d{4,}\//.test(trimmed) || 
            /^https?:\/\/doi\.org\//.test(trimmed) ||
            /^doi:/.test(trimmed.toLowerCase()) ||
-           // Multiple DOIs
            trimmed.split(/[\n,]/).every(d => d.trim() === '' || /^10\.\d{4,}\//.test(d.trim()) || /^https?:\/\/doi\.org\//.test(d.trim()));
   };
 
-  const detectedMode = searchMode !== 'auto' ? searchMode : (isDOI(searchInput) ? 'doi' : 'pubmed');
+  const detectedMode = isDOI(searchInput) ? 'doi' : 'keywords';
+
+  const toggleSource = (source: string) => {
+    setSearchSources(prev => {
+      const next = new Set(prev);
+      if (next.has(source)) {
+        if (next.size > 1) next.delete(source);
+      } else {
+        next.add(source);
+      }
+      return next;
+    });
+  };
   
   const [newRef, setNewRef] = useState<Partial<Reference>>({
     type: 'article',
