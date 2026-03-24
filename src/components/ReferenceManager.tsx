@@ -506,34 +506,35 @@ const ReferenceManager = ({
       </CardHeader>
       <CardContent className="space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="list">Liste</TabsTrigger>
-            <TabsTrigger value="import">DOI</TabsTrigger>
-            <TabsTrigger value="pubmed">PubMed</TabsTrigger>
+            <TabsTrigger value="search">Recherche</TabsTrigger>
             <TabsTrigger value="zotero">Zotero</TabsTrigger>
             <TabsTrigger value="formatted">Aperçu</TabsTrigger>
           </TabsList>
 
-          {/* Import DOI Tab */}
-          <TabsContent value="import" className="space-y-4">
+          {/* Unified Search Tab (DOI + PubMed) */}
+          <TabsContent value="search" className="space-y-4">
             <div className="space-y-3">
-              <Label>Importer depuis DOI</Label>
+              <div className="flex items-center justify-between">
+                <Label>Rechercher des références</Label>
+                <Badge variant="outline" className="text-xs">
+                  {detectedMode === 'doi' ? '🔗 DOI détecté' : '🔍 Mots-clés PubMed'}
+                </Badge>
+              </div>
               <p className="text-sm text-muted-foreground">
-                Entrez un ou plusieurs DOI (séparés par des virgules ou retours à la ligne) pour importer automatiquement
+                Entrez un DOI (ex: 10.1016/...) ou des mots-clés pour rechercher sur PubMed — la détection est automatique
               </p>
               <div className="flex gap-2">
                 <Input
-                  value={doiInput}
-                  onChange={(e) => setDoiInput(e.target.value)}
-                  placeholder="10.1016/j.xxx.2023.xxx ou https://doi.org/..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="10.1016/j.xxx.2023.xxx ou preeclampsia africa 2023"
                   className="flex-1"
-                  onKeyDown={(e) => e.key === 'Enter' && fetchFromDOI(false)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleUnifiedSearch()}
                 />
-                <Button onClick={() => fetchFromDOI(false)} disabled={isSearching} title="Aperçu">
+                <Button onClick={handleUnifiedSearch} disabled={isSearching}>
                   {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                </Button>
-                <Button onClick={() => fetchFromDOI(true)} disabled={isSearching} variant="secondary" title="Ajouter directement">
-                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                 </Button>
               </div>
             </div>
@@ -565,29 +566,8 @@ const ReferenceManager = ({
                 </div>
               </div>
             )}
-          </TabsContent>
 
-          {/* PubMed Search Tab */}
-          <TabsContent value="pubmed" className="space-y-4">
-            <div className="space-y-3">
-              <Label>Rechercher sur PubMed</Label>
-              <p className="text-sm text-muted-foreground">
-                Recherchez des articles sur PubMed et sélectionnez ceux à importer
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  value={pubmedQuery}
-                  onChange={(e) => setPubmedQuery(e.target.value)}
-                  placeholder="ex: preeclampsia africa 2023"
-                  className="flex-1"
-                  onKeyDown={(e) => e.key === 'Enter' && searchPubMed()}
-                />
-                <Button onClick={searchPubMed} disabled={isSearching}>
-                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                </Button>
-              </div>
-            </div>
-
+            {/* PubMed Search Results */}
             {searchResults.length > 0 && (
               <>
                 <div className="flex justify-between items-center">
@@ -625,7 +605,7 @@ const ReferenceManager = ({
                         toast.success(`${addedCount} référence(s) ajoutée(s)`);
                         setSelectedResults(new Set());
                         setSearchResults([]);
-                        setPubmedQuery('');
+                        setSearchInput('');
                       }}
                     >
                       <Plus className="w-4 h-4 mr-1" />
@@ -691,8 +671,6 @@ const ReferenceManager = ({
               </>
             )}
           </TabsContent>
-
-          <TabsContent value="list" className="space-y-3">
             {!showForm ? (
               <Button onClick={() => setShowForm(true)} className="w-full" variant="outline">
                 <Plus className="w-4 h-4 mr-2" /> Ajouter manuellement
