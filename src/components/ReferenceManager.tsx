@@ -671,6 +671,8 @@ const ReferenceManager = ({
               </>
             )}
           </TabsContent>
+
+          <TabsContent value="list" className="space-y-3">
             {!showForm ? (
               <Button onClick={() => setShowForm(true)} className="w-full" variant="outline">
                 <Plus className="w-4 h-4 mr-2" /> Ajouter manuellement
