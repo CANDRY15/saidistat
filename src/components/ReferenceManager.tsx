@@ -234,8 +234,9 @@ const ReferenceManager = ({
   const [filterYearFrom, setFilterYearFrom] = useState('');
   const [filterYearTo, setFilterYearTo] = useState('');
   const [filterLanguage, setFilterLanguage] = useState('all');
+  const [sortBy, setSortBy] = useState<'relevance' | 'year-desc' | 'year-asc'>('relevance');
 
-  // Apply filters to search results
+  // Apply filters and sorting to search results
   const filteredResults = searchResults.filter(ref => {
     const year = parseInt(ref.year);
     if (filterYearFrom && !isNaN(parseInt(filterYearFrom)) && year < parseInt(filterYearFrom)) return false;
@@ -248,6 +249,10 @@ const ReferenceManager = ({
       if (filterLanguage === 'pt' && !lang.includes('pt') && !lang.includes('por')) return false;
     }
     return true;
+  }).sort((a, b) => {
+    if (sortBy === 'year-desc') return parseInt(b.year || '0') - parseInt(a.year || '0');
+    if (sortBy === 'year-asc') return parseInt(a.year || '0') - parseInt(b.year || '0');
+    return 0; // relevance = original order
   });
 
   // Auto-detect if input is a DOI
