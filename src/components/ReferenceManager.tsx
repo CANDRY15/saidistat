@@ -577,7 +577,50 @@ const ReferenceManager = ({
                       {src.icon} {src.label}
                     </Badge>
                   ))}
+
+            {/* Filters */}
+            {searchResults.length > 0 && (
+              <div className="flex flex-wrap gap-3 items-end p-3 border rounded-lg bg-muted/20">
+                <div className="space-y-1">
+                  <Label className="text-xs">Année min</Label>
+                  <Input
+                    value={filterYearFrom}
+                    onChange={(e) => setFilterYearFrom(e.target.value)}
+                    placeholder="2000"
+                    className="w-20 h-8 text-xs"
+                    type="number"
+                  />
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Année max</Label>
+                  <Input
+                    value={filterYearTo}
+                    onChange={(e) => setFilterYearTo(e.target.value)}
+                    placeholder="2025"
+                    className="w-20 h-8 text-xs"
+                    type="number"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Langue</Label>
+                  <Select value={filterLanguage} onValueChange={setFilterLanguage}>
+                    <SelectTrigger className="w-[120px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Toutes</SelectItem>
+                      <SelectItem value="en">Anglais</SelectItem>
+                      <SelectItem value="fr">Français</SelectItem>
+                      <SelectItem value="es">Espagnol</SelectItem>
+                      <SelectItem value="pt">Portugais</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Badge variant="secondary" className="h-8 flex items-center text-xs">
+                  {filteredResults.length}/{searchResults.length} résultats
+                </Badge>
+              </div>
+            )}
               )}
               <div className="flex gap-2">
                 <Input
