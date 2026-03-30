@@ -636,7 +636,19 @@ const ReferenceManager = ({
                     </SelectContent>
                   </Select>
                 </div>
-                <Badge variant="secondary" className="h-8 flex items-center text-xs">
+                <div className="space-y-1">
+                  <Label className="text-xs">Tri</Label>
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+                    <SelectTrigger className="w-[130px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="relevance">Pertinence</SelectItem>
+                      <SelectItem value="year-desc">Année ↓</SelectItem>
+                      <SelectItem value="year-asc">Année ↑</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                   {filteredResults.length}/{searchResults.length} résultats
                 </Badge>
                 {(filterYearFrom || filterYearTo || filterLanguage !== 'all') && (
