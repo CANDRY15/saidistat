@@ -414,7 +414,7 @@ async function searchOpenAlex(englishQuery: string, frenchQuery: string): Promis
   // Search with English query first, then French
   for (const query of [englishQuery, frenchQuery]) {
     try {
-      const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=8&sort=relevance_score:desc&filter=type:article&select=id,doi,title,authorships,publication_year,primary_location,biblio`;
+      const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=8&sort=relevance_score:desc&filter=type:article&select=id,doi,title,authorships,publication_year,primary_location,biblio,language`;
       const response = await fetch(url, {
         headers: { 'User-Agent': 'SaidiStat/1.0 (mailto:contact@saidistat.com)' }
       });
@@ -442,6 +442,7 @@ async function searchOpenAlex(englishQuery: string, frenchQuery: string): Promis
             pages: work.biblio?.first_page && work.biblio?.last_page
               ? `${work.biblio.first_page}-${work.biblio.last_page}` : work.biblio?.first_page || '',
             doi,
+            language: work.language || '',
           });
         }
       }
@@ -510,7 +511,7 @@ async function searchCrossRef(frenchQuery: string, englishQuery: string): Promis
   for (const query of [frenchQuery, englishQuery]) {
     try {
       // Request more rows so we have enough after filtering
-      const url = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=20&sort=relevance&order=desc&filter=type:journal-article&select=DOI,title,author,published,published-print,container-title,volume,issue,page,subject,score`;
+      const url = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=20&sort=relevance&order=desc&filter=type:journal-article&select=DOI,title,author,published,published-print,container-title,volume,issue,page,subject,score,language`;
       const response = await fetch(url, {
         headers: { 'User-Agent': 'SaidiStat/1.0 (mailto:contact@saidistat.com)' }
       });
@@ -539,6 +540,7 @@ async function searchCrossRef(frenchQuery: string, englishQuery: string): Promis
             issue: item.issue || '',
             pages: item.page || '',
             doi,
+            language: item.language || '',
           });
         }
       }
@@ -660,6 +662,7 @@ function parseSimplePubMedXML(xml: string): any[] {
       const volume = articleXml.match(/<Volume>([^<]+)<\/Volume>/)?.[1] || '';
       const issue = articleXml.match(/<Issue>([^<]+)<\/Issue>/)?.[1] || '';
       const pages = articleXml.match(/<MedlinePgn>([^<]+)<\/MedlinePgn>/)?.[1] || '';
+      const language = articleXml.match(/<Language>([^<]+)<\/Language>/)?.[1] || '';
       
       const authorMatches = articleXml.match(/<Author[^>]*>[\s\S]*?<\/Author>/g) || [];
       const authors = authorMatches.map(authorXml => {
@@ -683,6 +686,7 @@ function parseSimplePubMedXML(xml: string): any[] {
           issue,
           pages,
           doi,
+          language,
         });
       }
     } catch (e) {

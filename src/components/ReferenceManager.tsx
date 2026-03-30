@@ -230,6 +230,26 @@ const ReferenceManager = ({
   const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set());
   const [searchSources, setSearchSources] = useState<Set<string>>(new Set(['pubmed', 'crossref', 'openalex']));
 
+  // Filters
+  const [filterYearFrom, setFilterYearFrom] = useState('');
+  const [filterYearTo, setFilterYearTo] = useState('');
+  const [filterLanguage, setFilterLanguage] = useState('all');
+
+  // Apply filters to search results
+  const filteredResults = searchResults.filter(ref => {
+    const year = parseInt(ref.year);
+    if (filterYearFrom && !isNaN(parseInt(filterYearFrom)) && year < parseInt(filterYearFrom)) return false;
+    if (filterYearTo && !isNaN(parseInt(filterYearTo)) && year > parseInt(filterYearTo)) return false;
+    if (filterLanguage !== 'all') {
+      const lang = (ref as any).language?.toLowerCase() || '';
+      if (filterLanguage === 'fr' && !lang.includes('fr') && !lang.includes('fre')) return false;
+      if (filterLanguage === 'en' && !lang.includes('en') && !lang.includes('eng') && lang !== '') return false;
+      if (filterLanguage === 'es' && !lang.includes('es') && !lang.includes('spa')) return false;
+      if (filterLanguage === 'pt' && !lang.includes('pt') && !lang.includes('por')) return false;
+    }
+    return true;
+  });
+
   // Auto-detect if input is a DOI
   const isDOI = (input: string): boolean => {
     const trimmed = input.trim();
@@ -573,6 +593,50 @@ const ReferenceManager = ({
               </div>
             </div>
 
+            {/* Filters */}
+            {searchResults.length > 0 && (
+              <div className="flex flex-wrap gap-3 items-end p-3 border rounded-lg bg-muted/20">
+                <div className="space-y-1">
+                  <Label className="text-xs">Année min</Label>
+                  <Input
+                    value={filterYearFrom}
+                    onChange={(e) => setFilterYearFrom(e.target.value)}
+                    placeholder="2000"
+                    className="w-20 h-8 text-xs"
+                    type="number"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Année max</Label>
+                  <Input
+                    value={filterYearTo}
+                    onChange={(e) => setFilterYearTo(e.target.value)}
+                    placeholder="2025"
+                    className="w-20 h-8 text-xs"
+                    type="number"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Langue</Label>
+                  <Select value={filterLanguage} onValueChange={setFilterLanguage}>
+                    <SelectTrigger className="w-[120px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Toutes</SelectItem>
+                      <SelectItem value="en">Anglais</SelectItem>
+                      <SelectItem value="fr">Français</SelectItem>
+                      <SelectItem value="es">Espagnol</SelectItem>
+                      <SelectItem value="pt">Portugais</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Badge variant="secondary" className="h-8 flex items-center text-xs">
+                  {filteredResults.length}/{searchResults.length} résultats
+                </Badge>
+              </div>
+            )}
+
             {/* DOI Preview */}
             {doiPreview && (
               <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
@@ -602,31 +666,31 @@ const ReferenceManager = ({
             )}
 
             {/* PubMed Search Results */}
-            {searchResults.length > 0 && (
+            {filteredResults.length > 0 && (
               <>
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-muted-foreground">
-                    {searchResults.length} résultat(s) - {selectedResults.size} sélectionné(s)
+                    {filteredResults.length} résultat(s) - {selectedResults.size} sélectionné(s)
                   </p>
                   <div className="flex gap-2">
                     <Button 
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        if (selectedResults.size === searchResults.length) {
+                        if (selectedResults.size === filteredResults.length) {
                           setSelectedResults(new Set());
                         } else {
-                          setSelectedResults(new Set(searchResults.map(r => r.id)));
+                          setSelectedResults(new Set(filteredResults.map(r => r.id)));
                         }
                       }}
                     >
-                      {selectedResults.size === searchResults.length ? 'Désélectionner tout' : 'Sélectionner tout'}
+                      {selectedResults.size === filteredResults.length ? 'Désélectionner tout' : 'Sélectionner tout'}
                     </Button>
                     <Button 
                       size="sm"
                       disabled={selectedResults.size === 0}
                       onClick={() => {
-                        const toAdd = searchResults.filter(r => selectedResults.has(r.id));
+                        const toAdd = filteredResults.filter(r => selectedResults.has(r.id));
                         let addedCount = 0;
                         const newRefs = [...references];
                         toAdd.forEach(ref => {
@@ -649,7 +713,7 @@ const ReferenceManager = ({
                 </div>
                 <ScrollArea className="h-[300px] border rounded-lg p-3">
                   <div className="space-y-2">
-                    {searchResults.map((ref, index) => {
+                    {filteredResults.map((ref, index) => {
                       const isSelected = selectedResults.has(ref.id);
                       const isAlreadyAdded = references.some(r => r.pmid === ref.pmid || (ref.doi && r.doi === ref.doi));
                       
