@@ -577,6 +577,21 @@ const ReferenceManager = ({
                       {src.icon} {src.label}
                     </Badge>
                   ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="10.1016/j.xxx.2023.xxx ou preeclampsia africa 2023"
+                  className="flex-1"
+                  onKeyDown={(e) => e.key === 'Enter' && handleUnifiedSearch()}
+                />
+                <Button onClick={handleUnifiedSearch} disabled={isSearching}>
+                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                </Button>
+              </div>
+            </div>
 
             {/* Filters */}
             {searchResults.length > 0 && (
@@ -621,20 +636,6 @@ const ReferenceManager = ({
                 </Badge>
               </div>
             )}
-              )}
-              <div className="flex gap-2">
-                <Input
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  placeholder="10.1016/j.xxx.2023.xxx ou preeclampsia africa 2023"
-                  className="flex-1"
-                  onKeyDown={(e) => e.key === 'Enter' && handleUnifiedSearch()}
-                />
-                <Button onClick={handleUnifiedSearch} disabled={isSearching}>
-                  {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                </Button>
-              </div>
-            </div>
 
             {/* DOI Preview */}
             {doiPreview && (
