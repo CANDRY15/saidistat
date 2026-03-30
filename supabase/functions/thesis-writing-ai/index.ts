@@ -414,7 +414,7 @@ async function searchOpenAlex(englishQuery: string, frenchQuery: string): Promis
   // Search with English query first, then French
   for (const query of [englishQuery, frenchQuery]) {
     try {
-      const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=8&sort=relevance_score:desc&filter=type:article&select=id,doi,title,authorships,publication_year,primary_location,biblio`;
+      const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=8&sort=relevance_score:desc&filter=type:article&select=id,doi,title,authorships,publication_year,primary_location,biblio,language`;
       const response = await fetch(url, {
         headers: { 'User-Agent': 'SaidiStat/1.0 (mailto:contact@saidistat.com)' }
       });
