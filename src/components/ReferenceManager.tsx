@@ -684,7 +684,7 @@ const ReferenceManager = ({
                         }
                       }}
                     >
-                      {selectedResults.size === searchResults.length ? 'Désélectionner tout' : 'Sélectionner tout'}
+                      {selectedResults.size === filteredResults.length ? 'Désélectionner tout' : 'Sélectionner tout'}
                     </Button>
                     <Button 
                       size="sm"
