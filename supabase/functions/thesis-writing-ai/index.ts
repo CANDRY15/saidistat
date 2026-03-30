@@ -442,6 +442,7 @@ async function searchOpenAlex(englishQuery: string, frenchQuery: string): Promis
             pages: work.biblio?.first_page && work.biblio?.last_page
               ? `${work.biblio.first_page}-${work.biblio.last_page}` : work.biblio?.first_page || '',
             doi,
+            language: work.language || '',
           });
         }
       }
