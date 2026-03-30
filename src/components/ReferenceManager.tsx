@@ -666,7 +666,7 @@ const ReferenceManager = ({
             )}
 
             {/* PubMed Search Results */}
-            {searchResults.length > 0 && (
+            {filteredResults.length > 0 && (
               <>
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-muted-foreground">
