@@ -634,6 +634,16 @@ const ReferenceManager = ({
                 <Badge variant="secondary" className="h-8 flex items-center text-xs">
                   {filteredResults.length}/{searchResults.length} résultats
                 </Badge>
+                {(filterYearFrom || filterYearTo || filterLanguage !== 'all') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => { setFilterYearFrom(''); setFilterYearTo(''); setFilterLanguage('all'); }}
+                  >
+                    <X className="w-3 h-3 mr-1" /> Réinitialiser
+                  </Button>
+                )}
               </div>
             )}
 
