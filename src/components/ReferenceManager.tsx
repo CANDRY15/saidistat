@@ -234,8 +234,9 @@ const ReferenceManager = ({
   const [filterYearFrom, setFilterYearFrom] = useState('');
   const [filterYearTo, setFilterYearTo] = useState('');
   const [filterLanguage, setFilterLanguage] = useState('all');
+  const [sortBy, setSortBy] = useState<'relevance' | 'year-desc' | 'year-asc'>('relevance');
 
-  // Apply filters to search results
+  // Apply filters and sorting to search results
   const filteredResults = searchResults.filter(ref => {
     const year = parseInt(ref.year);
     if (filterYearFrom && !isNaN(parseInt(filterYearFrom)) && year < parseInt(filterYearFrom)) return false;
@@ -248,6 +249,10 @@ const ReferenceManager = ({
       if (filterLanguage === 'pt' && !lang.includes('pt') && !lang.includes('por')) return false;
     }
     return true;
+  }).sort((a, b) => {
+    if (sortBy === 'year-desc') return parseInt(b.year || '0') - parseInt(a.year || '0');
+    if (sortBy === 'year-asc') return parseInt(a.year || '0') - parseInt(b.year || '0');
+    return 0; // relevance = original order
   });
 
   // Auto-detect if input is a DOI
@@ -631,15 +636,28 @@ const ReferenceManager = ({
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Tri</Label>
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+                    <SelectTrigger className="w-[130px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="relevance">Pertinence</SelectItem>
+                      <SelectItem value="year-desc">Année ↓</SelectItem>
+                      <SelectItem value="year-asc">Année ↑</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Badge variant="secondary" className="h-8 flex items-center text-xs">
                   {filteredResults.length}/{searchResults.length} résultats
                 </Badge>
-                {(filterYearFrom || filterYearTo || filterLanguage !== 'all') && (
+                {(filterYearFrom || filterYearTo || filterLanguage !== 'all' || sortBy !== 'relevance') && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-8 text-xs"
-                    onClick={() => { setFilterYearFrom(''); setFilterYearTo(''); setFilterLanguage('all'); }}
+                    onClick={() => { setFilterYearFrom(''); setFilterYearTo(''); setFilterLanguage('all'); setSortBy('relevance'); }}
                   >
                     <X className="w-3 h-3 mr-1" /> Réinitialiser
                   </Button>
