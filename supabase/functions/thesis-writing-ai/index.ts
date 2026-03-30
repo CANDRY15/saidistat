@@ -660,6 +660,7 @@ function parseSimplePubMedXML(xml: string): any[] {
       const volume = articleXml.match(/<Volume>([^<]+)<\/Volume>/)?.[1] || '';
       const issue = articleXml.match(/<Issue>([^<]+)<\/Issue>/)?.[1] || '';
       const pages = articleXml.match(/<MedlinePgn>([^<]+)<\/MedlinePgn>/)?.[1] || '';
+      const language = articleXml.match(/<Language>([^<]+)<\/Language>/)?.[1] || '';
       
       const authorMatches = articleXml.match(/<Author[^>]*>[\s\S]*?<\/Author>/g) || [];
       const authors = authorMatches.map(authorXml => {
@@ -683,6 +684,7 @@ function parseSimplePubMedXML(xml: string): any[] {
           issue,
           pages,
           doi,
+          language,
         });
       }
     } catch (e) {
