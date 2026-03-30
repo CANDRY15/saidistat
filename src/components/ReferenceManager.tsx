@@ -677,10 +677,10 @@ const ReferenceManager = ({
                       variant="outline" 
                       size="sm"
                       onClick={() => {
-                        if (selectedResults.size === searchResults.length) {
+                        if (selectedResults.size === filteredResults.length) {
                           setSelectedResults(new Set());
                         } else {
-                          setSelectedResults(new Set(searchResults.map(r => r.id)));
+                          setSelectedResults(new Set(filteredResults.map(r => r.id)));
                         }
                       }}
                     >
