@@ -540,6 +540,7 @@ async function searchCrossRef(frenchQuery: string, englishQuery: string): Promis
             issue: item.issue || '',
             pages: item.page || '',
             doi,
+            language: item.language || '',
           });
         }
       }
