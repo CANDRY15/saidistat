@@ -713,7 +713,7 @@ const ReferenceManager = ({
                 </div>
                 <ScrollArea className="h-[300px] border rounded-lg p-3">
                   <div className="space-y-2">
-                    {searchResults.map((ref, index) => {
+                    {filteredResults.map((ref, index) => {
                       const isSelected = selectedResults.has(ref.id);
                       const isAlreadyAdded = references.some(r => r.pmid === ref.pmid || (ref.doi && r.doi === ref.doi));
                       
