@@ -511,7 +511,7 @@ async function searchCrossRef(frenchQuery: string, englishQuery: string): Promis
   for (const query of [frenchQuery, englishQuery]) {
     try {
       // Request more rows so we have enough after filtering
-      const url = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=20&sort=relevance&order=desc&filter=type:journal-article&select=DOI,title,author,published,published-print,container-title,volume,issue,page,subject,score`;
+      const url = `https://api.crossref.org/works?query=${encodeURIComponent(query)}&rows=20&sort=relevance&order=desc&filter=type:journal-article&select=DOI,title,author,published,published-print,container-title,volume,issue,page,subject,score,language`;
       const response = await fetch(url, {
         headers: { 'User-Agent': 'SaidiStat/1.0 (mailto:contact@saidistat.com)' }
       });
