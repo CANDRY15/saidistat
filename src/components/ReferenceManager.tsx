@@ -690,7 +690,7 @@ const ReferenceManager = ({
                       size="sm"
                       disabled={selectedResults.size === 0}
                       onClick={() => {
-                        const toAdd = searchResults.filter(r => selectedResults.has(r.id));
+                        const toAdd = filteredResults.filter(r => selectedResults.has(r.id));
                         let addedCount = 0;
                         const newRefs = [...references];
                         toAdd.forEach(ref => {
