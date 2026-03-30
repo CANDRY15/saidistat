@@ -670,7 +670,7 @@ const ReferenceManager = ({
               <>
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-muted-foreground">
-                    {searchResults.length} résultat(s) - {selectedResults.size} sélectionné(s)
+                    {filteredResults.length} résultat(s) - {selectedResults.size} sélectionné(s)
                   </p>
                   <div className="flex gap-2">
                     <Button 
