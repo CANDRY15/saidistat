@@ -230,6 +230,26 @@ const ReferenceManager = ({
   const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set());
   const [searchSources, setSearchSources] = useState<Set<string>>(new Set(['pubmed', 'crossref', 'openalex']));
 
+  // Filters
+  const [filterYearFrom, setFilterYearFrom] = useState('');
+  const [filterYearTo, setFilterYearTo] = useState('');
+  const [filterLanguage, setFilterLanguage] = useState('all');
+
+  // Apply filters to search results
+  const filteredResults = searchResults.filter(ref => {
+    const year = parseInt(ref.year);
+    if (filterYearFrom && !isNaN(parseInt(filterYearFrom)) && year < parseInt(filterYearFrom)) return false;
+    if (filterYearTo && !isNaN(parseInt(filterYearTo)) && year > parseInt(filterYearTo)) return false;
+    if (filterLanguage !== 'all') {
+      const lang = (ref as any).language?.toLowerCase() || '';
+      if (filterLanguage === 'fr' && !lang.includes('fr') && !lang.includes('fre')) return false;
+      if (filterLanguage === 'en' && !lang.includes('en') && !lang.includes('eng') && lang !== '') return false;
+      if (filterLanguage === 'es' && !lang.includes('es') && !lang.includes('spa')) return false;
+      if (filterLanguage === 'pt' && !lang.includes('pt') && !lang.includes('por')) return false;
+    }
+    return true;
+  });
+
   // Auto-detect if input is a DOI
   const isDOI = (input: string): boolean => {
     const trimmed = input.trim();
